@@ -1,15 +1,22 @@
 name: Deploy to GitHub Pages
 
 # The app is already a static site, so "building" is just uploading the repo with the
-# test scaffolding stripped out. Enable Pages once under
-# Settings -> Pages -> Source: GitHub Actions.
+# test scaffolding stripped out.
+#
+# This is manual-only on purpose. Publishing needs Pages turned on for the repository,
+# and until it is every push would fail this workflow for no useful reason. To publish:
+#
+#   1. Settings -> Pages -> Source: GitHub Actions   (or rely on `enablement: true` below)
+#   2. Actions -> Deploy to GitHub Pages -> Run workflow
+#   3. once that succeeds, add the `push` trigger below to publish on every merge:
+#
+#        push:
+#          branches: [main]
 #
 # Note: Pages for a private repository requires a paid GitHub plan. On the free plan
-# either make the repository public or run the tool locally (`open index.html`).
+# either make the repository public or just run the tool locally (`open index.html`).
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -53,6 +60,9 @@ jobs:
           ls -R _site
 
       - uses: actions/configure-pages@v5
+        with:
+          # turn Pages on for the repository if the plan allows it
+          enablement: true
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site

@@ -137,10 +137,17 @@ You can also open `index.html#selftest` to run the logic assertions in the brows
 
 ## Deploying
 
-The app is a static site, so GitHub Pages works out of the box. Enable it under
-**Settings → Pages → Source: GitHub Actions** and the included workflow publishes on every
-push to `main`. Note that Pages for a *private* repository requires a paid GitHub plan; on
-the free plan either make the repo public or just run it locally.
+The app is a static site, so GitHub Pages works out of the box. The included
+`Deploy to GitHub Pages` workflow is **manual-only** to begin with, so it does not fail CI
+before Pages has been turned on:
+
+1. **Settings → Pages → Source: GitHub Actions**
+2. **Actions → Deploy to GitHub Pages → Run workflow**
+3. once that succeeds, add the `push` trigger noted in the workflow to publish on every
+   merge to `main`
+
+Note that Pages for a *private* repository requires a paid GitHub plan; on the free plan
+either make the repo public or just run it locally.
 
 ## Contributing
 
