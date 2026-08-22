@@ -1,0 +1,80 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  logic:
+    name: Logic tests (no browser)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Run the parser, calendar, scheduler and validator assertions
+        run: npm test
+
+  browser:
+    name: Browser tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install Playwright and Chromium
+        run: |
+          npm install --no-save playwright@1.62.1
+          npx playwright install --with-deps chromium
+      - name: Run rendering and drag/resize tests
+        run: npm run test:browser
+
+  hygiene:
+    name: Hygiene
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Every example CSV is well formed and loads
+        run: |
+          python3 - <<'PY'
+          import csv, glob, sys
+          fail = False
+          for path in sorted(glob.glob('examples/*.csv')):
+              rows = list(csv.reader(open(path, encoding='utf-8-sig')))
+              if len(rows) < 2:
+                  print(f'{path}: fewer than 2 rows'); fail = True; continue
+              width = len(rows[0])
+              ragged = [i + 1 for i, r in enumerate(rows) if len(r) != width]
+              if ragged:
+                  print(f'{path}: ragged rows at {ragged}'); fail = True
+              header = [h.strip().lower() for h in rows[0]]
+              if not ({'name', 'title', 'task'} & set(header)):
+                  print(f'{path}: no name/title/task column'); fail = True
+              print(f'{path}: {len(rows) - 1} rows, {width} columns, ok')
+          sys.exit(1 if fail else 0)
+          PY
+
+      - name: Vendored licence and attribution are present
+        run: |
+          test -f NOTICE || { echo "::error::NOTICE is missing"; exit 1; }
+          test -f vendor/frappe-gantt.LICENSE.txt || { echo "::error::vendored licence missing"; exit 1; }
+          grep -q 'frappe/gantt' NOTICE || { echo "::error::NOTICE does not credit Frappe Gantt"; exit 1; }
+          grep -q 'frappe/gantt' index.html || { echo "::error::UI does not credit Frappe Gantt"; exit 1; }
+          echo "attribution ok"
+
+      - name: App makes no network requests
+        run: |
+          # the tool must work offline; nothing may be pulled from a CDN
+          if grep -nE 'https?://[^"'"'"' ]*\.(js|css)' index.html app.js ; then
+            echo "::error::remote script or stylesheet referenced - vendor it instead"
+            exit 1
+          fi
+          echo "no remote assets referenced"
