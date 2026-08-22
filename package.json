@@ -1,0 +1,20 @@
+{
+  "name": "timeline-planner",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Static browser tool that turns a CSV project plan into a working-day Gantt chart with dependency-aware rescheduling",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "test": "node test/logic.test.mjs",
+    "test:browser": "node test/browser.test.mjs",
+    "test:all": "npm test && npm run test:browser",
+    "serve": "python3 -m http.server 8000"
+  },
+  "devDependencies": {
+    "playwright": "1.62.1"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
