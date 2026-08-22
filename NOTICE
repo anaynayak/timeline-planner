@@ -1,0 +1,25 @@
+Timeline Planner bundles the following third-party software.
+
+
+Frappe Gantt
+------------
+The Gantt rendering in this project is built on **Frappe Gantt**, an open-source
+JavaScript Gantt chart library by Frappe Technologies Pvt. Ltd. It draws the bars,
+dependency arrows, timeline header, and drag/resize interactions. This project would
+have been a great deal more work without it - thank you to the Frappe team and its
+contributors.
+
+  Project:  https://github.com/frappe/gantt
+  Homepage: https://frappe.io/gantt
+  Version:  1.2.2
+  Licence:  MIT
+  Files:    vendor/frappe-gantt.umd.js
+            vendor/frappe-gantt.css
+  Licence text: vendor/frappe-gantt.LICENSE.txt
+
+The library is vendored rather than loaded from a CDN so that the tool makes no
+network requests at all and keeps working offline. The files are unmodified copies of
+the `dist` output from npm `frappe-gantt@1.2.2`.
+
+Copyright (c) 2024 Frappe Technologies Pvt. Ltd.
+Licensed under the MIT License.
