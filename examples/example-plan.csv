@@ -1,0 +1,17 @@
+id,name,description,tag,start_date,end_date,estimate,owner,confidence,blocked by
+survey,Site survey,Measure the unit and photograph existing services.,Fit-out,2027-03-01,2027-03-05,5,Priya,high,
+permits,Council permits,Change-of-use and signage applications.,Admin,2027-03-08,2027-03-19,10,Sam,low,Site survey
+lease,Sign lease,,Admin,2027-03-08,2027-03-12,5,Sam,high,Site survey
+design,Interior design,"Layout, finishes and lighting plan.",Fit-out,2027-03-08,2027-03-19,10,Priya,medium,Site survey
+electrics,Electrical first fix,,Fit-out,2027-03-22,2027-04-02,10,Dev,medium,"Interior design, Council permits"
+plumbing,Plumbing first fix,,Fit-out,2027-03-22,2027-03-26,5,Dev,high,Interior design
+joinery,"Counter, shelving and seating",Built to the approved design.,Fit-out,2027-04-05,2027-04-23,20,Priya,low,Electrical first fix
+espresso,Espresso machine install,,Equipment,2027-04-26,2027-04-30,5,Dev,high,"Counter, shelving and seating"
+grinder,Grinder and water filter,,Equipment,2027-04-26,2027-04-30,,Dev,medium,"Counter, shelving and seating"
+menu,Menu and pricing,,Brand,2027-03-08,2027-03-19,10,Ada,medium,Sign lease
+supplier,Bean supplier contract,,Brand,2027-04-05,2027-04-09,5,Ada,high,Menu and pricing
+hire,Hire and train baristas,,People,2027-04-12,2027-04-30,15,Ada,low,Menu and pricing
+signage,Exterior signage,,Brand,2027-04-26,2027-04-30,5,Sam,medium,Council permits
+snag,Snagging and deep clean,,Fit-out,2027-05-03,2027-05-07,5,Priya,high,"Espresso machine install, Grinder and water filter, Exterior signage"
+soft,Soft launch week,"Friends and family, invited press.",Launch,2027-05-10,2027-05-14,5,Ada,medium,"Snagging and deep clean, Hire and train baristas"
+open,Public opening,,Launch,2027-05-17,2027-05-21,5,Ada,high,Soft launch week

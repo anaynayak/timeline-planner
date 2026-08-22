@@ -1,0 +1,16 @@
+id,name,description,tag,start_date,duration,estimate,dependency,pinned,owner,cost_centre
+disc,Discovery workshops,Two workshops with the depot leads.,Discovery,2028-01-03,10,10,,,Rae,OPS-100
+asis,As-is process map,,Discovery,2028-01-17,5,5,disc,,Rae,OPS-100
+reqs,Requirements sign-off,,Discovery,2028-01-24,5,10,asis,,Kofi,OPS-100
+vendor,Vendor shortlist,"Scoring on fit, price and lead time.",Procurement,2028-01-24,10,10,asis,,Kofi,OPS-200
+po,Raise purchase order,,Procurement,2028-02-07,5,5,vendor;reqs,yes,Kofi,OPS-200
+survey,Depot survey,Floor loading and power capacity.,Build,2028-02-07,5,5,reqs,,Nils,OPS-300
+racking,Racking installation,,Build,2028-02-14,15,15,survey;po,,Nils,OPS-300
+conveyor,Conveyor installation,,Build,2028-03-06,20,20,racking,,Nils,OPS-300
+wms,WMS configuration,,Software,2028-02-14,20,20,reqs,,Amara,OPS-400
+intg,ERP integration,,Software,2028-03-13,15,20,wms,,Amara,OPS-400
+labels,Label printing service,,Software,2028-03-13,5,5,wms,,Amara,OPS-400
+sat,Site acceptance test,,Handover,2028-04-03,10,10,conveyor;intg;labels,,Nils,OPS-300
+train,Operator training,,Handover,2028-04-17,10,10,sat,,Rae,OPS-100
+runbook,Runbook and handover pack,,Handover,2028-04-17,5,,sat,,Amara,OPS-400
+golive,Go live,,Handover,2028-05-01,5,5,train;runbook,,Kofi,OPS-100
