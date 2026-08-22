@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Timeline Planner</title>
+<link rel="stylesheet" href="vendor/frappe-gantt.css">
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --panel-2: #1e222b;
+    --line: #2b303b;
+    --fg: #e6e9ef;
+    --fg-dim: #9aa3b2;
+    --accent: #4c8dff;
+    --warn: #d99b32;
+    --err: #e05561;
+    --ok: #4bb87c;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg); color: var(--fg);
+    font: 13px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  button {
+    background: var(--panel-2); border: 1px solid var(--line); color: var(--fg);
+    border-radius: 6px; padding: 5px 10px; cursor: pointer;
+  }
+  button:hover:not(:disabled) { border-color: #3d444f; background: #252a34; }
+  button:disabled { opacity: .4; cursor: default; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.danger { border-color: #5c2b30; color: #ff9aa2; }
+  input[type=text], input[type=number], input[type=date], textarea, select {
+    background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px;
+  }
+  input[type=number] { width: 70px; }
+  label { color: var(--fg-dim); }
+
+  /* ---------- toolbar ---------- */
+  #toolbar {
+    display: flex; flex-wrap: wrap; gap: 14px; align-items: center;
+    padding: 9px 12px; background: var(--panel); border-bottom: 1px solid var(--line);
+    flex: 0 0 auto;
+  }
+  #toolbar .grp { display: flex; gap: 6px; align-items: center; }
+  #toolbar .grp > label { white-space: nowrap; }
+  #toolbar .sep { width: 1px; height: 22px; background: var(--line); }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+  .seg button { border: 0; border-radius: 0; padding: 5px 9px; background: transparent; }
+  .seg button.on { background: var(--accent); color: #fff; }
+  .brand { font-weight: 600; letter-spacing: .2px; margin-right: 4px; }
+  .brand small { color: var(--fg-dim); font-weight: 400; }
+  .credit { margin-left: auto; color: var(--fg-dim); font-size: 11px; }
+  .credit a { color: var(--fg-dim); }
+  .credit a:hover { color: var(--accent); }
+  .badge { border-radius: 999px; padding: 1px 7px; font-size: 11px; font-weight: 600; }
+  .badge.err { background: #3a1f23; color: #ff8f98; }
+  .badge.warn { background: #382c1a; color: #f0bd6a; }
+  .badge.ok { background: #1c3327; color: #7fd6a3; }
+
+  /* ---------- layout ---------- */
+  #main { flex: 1 1 auto; display: flex; min-height: 0; }
+  /* the gantt scrolls horizontally inside itself, so #chart-wrap only scrolls vertically
+     and the name gutter stays put beside it */
+  #chart-wrap { flex: 1 1 auto; min-width: 0; display: flex; align-items: flex-start;
+                overflow-x: hidden; overflow-y: auto; }
+  #gutter { flex: 0 0 250px; background: var(--panel); border-right: 1px solid var(--line); }
+  #gantt { flex: 1 1 auto; min-width: 0; }
+  #gantt-empty { padding: 40px; color: var(--fg-dim); }
+
+  .g-head { display: flex; align-items: flex-end; padding: 0 9px 7px;
+            border-bottom: 1px solid var(--line); color: var(--fg-dim);
+            font-size: 11px; text-transform: uppercase; letter-spacing: .6px; box-sizing: border-box; }
+  .g-row { display: flex; align-items: center; gap: 6px; padding: 0 9px; cursor: pointer;
+           border-bottom: 1px solid #1b1f27; box-sizing: border-box; }
+  .g-row:hover { background: #222732; }
+  .g-row.sel { background: #263041; box-shadow: inset 2px 0 0 var(--accent); }
+  .g-row .nm { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .g-row .mt { flex: 0 0 auto; font-size: 11px; color: var(--fg-dim); font-variant-numeric: tabular-nums; }
+  .g-row.bad .mt { color: #f0bd6a; font-weight: 600; }
+  .g-row .dot { flex: 0 0 auto; width: 7px; height: 7px; border-radius: 2px; background: #454b58; }
+  .g-row.crit .nm { color: #ffc9cd; }
+
+  /* the gutter carries the names, so drop the labels frappe pushes outside short bars */
+  .gantt .bar-label.big { display: none; }
+  #side {
+    flex: 0 0 340px; border-left: 1px solid var(--line); background: var(--panel);
+    display: flex; flex-direction: column; min-height: 0;
+  }
+  #side-tabs { display: flex; border-bottom: 1px solid var(--line); flex: 0 0 auto; }
+  #side-tabs button { flex: 1; border: 0; border-radius: 0; background: transparent; padding: 8px; color: var(--fg-dim); }
+  #side-tabs button.on { color: var(--fg); box-shadow: inset 0 -2px 0 var(--accent); }
+  .side-body { flex: 1 1 auto; overflow: auto; padding: 10px; }
+  .side-body[hidden] { display: none; }
+
+  /* ---------- findings ---------- */
+  .finding { border: 1px solid var(--line); border-left-width: 3px; border-radius: 6px; padding: 7px 9px; margin-bottom: 7px; background: var(--panel-2); }
+  .finding.error { border-left-color: var(--err); }
+  .finding.warn { border-left-color: var(--warn); }
+  .finding.info { border-left-color: var(--fg-dim); }
+  .finding .h { font-weight: 600; margin-bottom: 2px; }
+  .finding .m { color: var(--fg-dim); font-size: 12px; }
+  .finding .acts { margin-top: 6px; display: flex; gap: 6px; }
+  .finding .acts button { padding: 3px 8px; font-size: 12px; }
+  .group-h { color: var(--fg-dim); text-transform: uppercase; font-size: 11px; letter-spacing: .6px; margin: 12px 0 6px; }
+  .group-h:first-child { margin-top: 0; }
+
+  /* ---------- editor ---------- */
+  .field { margin-bottom: 10px; }
+  .field > label { display: block; margin-bottom: 3px; font-size: 12px; }
+  .field input[type=text], .field textarea, .field select { width: 100%; }
+  .field textarea { min-height: 54px; resize: vertical; }
+  .row2 { display: flex; gap: 8px; }
+  .row2 > * { flex: 1; }
+  .picker { max-height: 160px; overflow: auto; border: 1px solid var(--line); border-radius: 6px; padding: 4px; background: var(--panel-2); }
+  .picker label { display: flex; gap: 6px; align-items: flex-start; padding: 2px 3px; color: var(--fg); font-size: 12px; cursor: pointer; }
+  .picker label:hover { background: #252a34; }
+  .picker input { margin-top: 3px; flex: 0 0 auto; }
+  .hint { color: var(--fg-dim); font-size: 11px; margin-top: 3px; }
+  .est-cmp { display: flex; gap: 10px; font-size: 12px; color: var(--fg-dim); }
+
+  /* ---------- columns ---------- */
+  .colmap { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .colmap label { flex: 0 0 96px; font-size: 12px; }
+  .colmap select { flex: 1 1 auto; min-width: 0; }
+  .colmap.unmapped label { color: #f0bd6a; }
+  .legend { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+  .legend span { display: flex; align-items: center; gap: 5px; font-size: 12px; }
+  .legend i { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
+  .passthru { font-size: 12px; color: var(--fg-dim); }
+
+  /* ---------- load table ---------- */
+  table.load { width: 100%; border-collapse: collapse; font-size: 12px; }
+  table.load th, table.load td { text-align: left; padding: 3px 6px; border-bottom: 1px solid var(--line); }
+  table.load th { color: var(--fg-dim); font-weight: 500; }
+  table.load td.over { color: #ff9aa2; font-weight: 600; }
+  .kv { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px solid var(--line); }
+  .kv span:last-child { font-variant-numeric: tabular-nums; }
+
+  /* ---------- gantt bar colours ---------- */
+  .gantt .bar-wrapper .bar { fill: #454b58; }
+  .gantt .bar-wrapper.critical .bar { stroke: #ff5f6d; stroke-width: 2px; }
+  .gantt .bar-wrapper.mismatch .bar { stroke: var(--warn); stroke-width: 2px; stroke-dasharray: 4 3; }
+  .gantt .bar-wrapper.selected .bar { stroke: #fff; stroke-width: 2px; }
+  .gantt .bar-wrapper .bar-label { fill: #fff; font-weight: 500; }
+  .gantt .bar-progress { fill: transparent; }
+  .gantt-container { --g-bar-color: #454b58; --g-border-color: var(--line); --g-row-color: #14171d;
+    --g-row-border-color: #21252e; --g-header-background: var(--panel); --g-text-dark: var(--fg);
+    --g-text-light: #fff; --g-text-muted: var(--fg-dim); --g-tick-color: #222731;
+    --g-tick-color-thick: #333a47; --g-arrow-color: #6b7484; --g-handle-color: #cfd6e4;
+    background: var(--bg); }
+  .gantt .lower-text, .gantt .upper-text { fill: var(--fg-dim); }
+  .gantt .mon .lower-text { fill: var(--fg); }
+
+  /* ---------- dropzone ---------- */
+  #drop {
+    position: fixed; inset: 0; background: rgba(15,17,21,.92); z-index: 50;
+    display: none; align-items: center; justify-content: center; font-size: 18px; color: var(--fg);
+    border: 3px dashed var(--accent);
+  }
+  #drop.on { display: flex; }
+  #toast {
+    position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
+    background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px;
+    padding: 8px 14px; z-index: 60; opacity: 0; transition: opacity .2s; pointer-events: none;
+  }
+  #toast.on { opacity: 1; }
+
+  /* ---------- selftest ---------- */
+  #selftest { display: none; padding: 20px; overflow: auto; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+  body.selftest #toolbar, body.selftest #main { display: none; }
+  body.selftest #selftest { display: block; }
+  #selftest .p { color: var(--ok); }
+  #selftest .f { color: var(--err); font-weight: 700; }
+  #selftest h2 { font-family: inherit; font-size: 14px; margin: 18px 0 6px; color: var(--fg-dim); }
+</style>
+</head>
+<body>
+
+<div id="toolbar">
+  <span class="brand">Timeline Planner <small id="file-name">plan.csv</small></span>
+  <div class="sep"></div>
+
+  <div class="grp">
+    <label for="proj-start">Project start</label>
+    <input type="date" id="proj-start">
+    <button id="btn-shift-back" title="Shift whole plan 1 week earlier">&laquo;</button>
+    <button id="btn-shift-fwd" title="Shift whole plan 1 week later">&raquo;</button>
+  </div>
+
+  <div class="grp">
+    <label>Propagation</label>
+    <div class="seg" id="seg-mode">
+      <button data-mode="rigid" class="on" title="Downstream keeps its current gap">Rigid</button>
+      <button data-mode="asap" title="Downstream pulled to earliest legal start">ASAP</button>
+    </div>
+    <button id="btn-reflow" title="Run a one-off ASAP forward pass now">Reflow</button>
+  </div>
+
+  <div class="grp">
+    <label>Zoom</label>
+    <div class="seg" id="seg-zoom">
+      <button data-zoom="Day" class="on">Day</button>
+      <button data-zoom="Compact">Compact</button>
+      <button data-zoom="Tiny">Tiny</button>
+    </div>
+  </div>
+
+  <div class="grp">
+    <label for="team-size">Team</label>
+    <input type="number" id="team-size" min="1" max="99" value="4">
+  </div>
+
+  <div class="sep"></div>
+  <div class="grp">
+    <button id="btn-undo" title="Undo (Cmd/Ctrl+Z)">Undo</button>
+    <button id="btn-redo" title="Redo (Cmd/Ctrl+Shift+Z)">Redo</button>
+    <button id="btn-add" class="primary">+ Task</button>
+  </div>
+  <div class="sep"></div>
+  <div class="grp">
+    <button id="btn-open">Open file</button>
+    <button id="btn-download">Download CSV</button>
+    <button id="btn-copy">Copy for Miro</button>
+    <button id="btn-reset" title="Discard local edits and reload the bundled file">Reset</button>
+    <input type="file" id="file-input" accept=".csv,.md,.markdown,.txt,.tsv" hidden>
+  </div>
+  <div class="grp credit">
+    Gantt by <a href="https://github.com/frappe/gantt" target="_blank" rel="noopener noreferrer">Frappe Gantt</a> (MIT)
+  </div>
+</div>
+
+<div id="main">
+  <div id="chart-wrap">
+    <div id="gutter"></div>
+    <div id="gantt"></div>
+  </div>
+  <div id="side">
+    <div id="side-tabs">
+      <button data-tab="validate" class="on">Validation <span id="v-badge" class="badge ok">0</span></button>
+      <button data-tab="editor">Task</button>
+      <button data-tab="load">Load</button>
+      <button data-tab="columns">Columns</button>
+    </div>
+    <div class="side-body" id="tab-validate"></div>
+    <div class="side-body" id="tab-editor" hidden></div>
+    <div class="side-body" id="tab-load" hidden></div>
+    <div class="side-body" id="tab-columns" hidden></div>
+  </div>
+</div>
+
+<div id="drop">Drop a <code>.csv</code> plan or a Miro <code>.md</code> export here</div>
+<div id="toast"></div>
+<div id="selftest"></div>
+
+<script type="text/plain" id="sample-csv">id,name,description,tag,start_date,end_date,estimate,owner,confidence,blocked by
+survey,Site survey,Measure the unit and photograph existing services.,Fit-out,2027-03-01,2027-03-05,5,Priya,high,
+permits,Council permits,Change-of-use and signage applications.,Admin,2027-03-08,2027-03-19,10,Sam,low,Site survey
+lease,Sign lease,,Admin,2027-03-08,2027-03-12,5,Sam,high,Site survey
+design,Interior design,"Layout, finishes and lighting plan.",Fit-out,2027-03-08,2027-03-19,10,Priya,medium,Site survey
+electrics,Electrical first fix,,Fit-out,2027-03-22,2027-04-02,10,Dev,medium,"Interior design, Council permits"
+plumbing,Plumbing first fix,,Fit-out,2027-03-22,2027-03-26,5,Dev,high,Interior design
+joinery,"Counter, shelving and seating",Built to the approved design.,Fit-out,2027-04-05,2027-04-23,20,Priya,low,Electrical first fix
+espresso,Espresso machine install,,Equipment,2027-04-26,2027-04-30,5,Dev,high,"Counter, shelving and seating"
+grinder,Grinder and water filter,,Equipment,2027-04-26,2027-04-30,,Dev,medium,"Counter, shelving and seating"
+menu,Menu and pricing,,Brand,2027-03-08,2027-03-19,10,Ada,medium,Sign lease
+supplier,Bean supplier contract,,Brand,2027-04-05,2027-04-09,5,Ada,high,Menu and pricing
+hire,Hire and train baristas,,People,2027-04-12,2027-04-30,15,Ada,low,Menu and pricing
+signage,Exterior signage,,Brand,2027-04-26,2027-04-30,5,Sam,medium,Council permits
+snag,Snagging and deep clean,,Fit-out,2027-05-03,2027-05-07,5,Priya,high,"Espresso machine install, Grinder and water filter, Exterior signage"
+soft,Soft launch week,"Friends and family, invited press.",Launch,2027-05-10,2027-05-14,5,Ada,medium,"Snagging and deep clean, Hire and train baristas"
+open,Public opening,,Launch,2027-05-17,2027-05-21,5,Ada,high,Soft launch week
+</script>
+
+<script type="text/plain" id="sample-md">*[Example board](https://example.invalid/board)*
+
+| Title | Description | Tag | Start Date | End Date | Estimate | Ana \# | Bo \# | Blocked by |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Kick off | Agree scope \+ owners\. | Setup | 2027\-03\-01T00:00:00\.000Z | 2027\-03\-07T00:00:00\.000Z | 5 | 5 | 5 |  |
+| Draft schema | Tables \(core, staging\) | Build | 2027\-03\-08T00:00:00\.000Z | 2027\-03\-21T00:00:00\.000Z | 10 | 10 | 5 | Kick off |
+| Ingest job | | Build | 2027\-03\-22T00:00:00\.000Z | 2027\-03\-28T00:00:00\.000Z | 10 | 10 | 10 | Draft schema |
+| Report pack | R&amp;D view \+ exec view | Build | 2027\-03\-29T00:00:00\.000Z | 2027\-04\-11T00:00:00\.000Z | 10 | 5 | 10 | Ingest job |
+| Handover | | Setup | 2027\-04\-12T00:00:00\.000Z | 2027\-04\-18T00:00:00\.000Z | 5 | 5 | 5 | Report pack |
+</script>
+
+<script src="vendor/frappe-gantt.umd.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
