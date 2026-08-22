@@ -1,0 +1,17 @@
+node_modules/
+
+# local plans - keep real project data out of the repo
+*.local.csv
+*.local.md
+/plan.csv
+/timeline.csv
+/Timeline-view.md
+
+# tooling / OS noise
+.DS_Store
+*.log
+.playwright/
+test-results/
+playwright-report/
+.idea/
+.vscode/

@@ -1,0 +1,8 @@
+* text=auto eol=lf
+
+# vendored third-party code: exclude from language stats and diffs by default
+vendor/** linguist-vendored
+
+*.csv text
+*.md text
+*.png binary
