@@ -42,13 +42,29 @@ CI runs both suites plus a hygiene job on every push and pull request.
 2. **No runtime dependencies beyond `vendor/`, and no network requests.** The tool has to
    work offline with confidential plans in it. Third-party code is vendored into `vendor/`
    with its licence, and CI fails if a remote `.js` or `.css` is referenced. There are
-   exactly two vendored dependencies, and the reasoning for each - plus for the ones that
-   were turned down - is recorded under "Dependency decisions" in `CLAUDE.md`. Adding a
-   third is a decision to discuss, not a drive-by.
+   exactly two vendored bundles (three packages: Frappe Gantt; Preact + htm), and the
+   reasoning for each - plus for the ones that were turned down - is recorded under
+   "Dependency decisions" in `CLAUDE.md`. Adding another is a decision to discuss, not a
+   drive-by.
 3. **Examples stay synthetic.** `examples/*.csv` must be invented data. CI greps for names
    from the real board this was written against. Never commit a client plan; `.gitignore`
    already excludes `timeline.csv` and `plan.csv` at the repo root and `*.local.csv`.
 4. **Every behaviour change ships with an assertion.** See below for where they go.
+
+## `selftest()` is a test suite, not input validation
+
+Two similarly-named things that are unrelated:
+
+- **`selftest()`** in `src/selftest.js` asks *is the code correct?* It runs only against the
+  synthetic example bundled in `index.html`, never against a user's plan, and reports
+  pass/fail. This is the test suite.
+- **`validate()`** in `src/validate.js` asks *is this plan self-consistent?* It runs on every
+  render against whatever is loaded, and produces the findings in the Validation tab -
+  missing estimates, dependency violations, cycles, overloaded weeks - each with a one-click
+  fix. This is a product feature.
+
+A new assertion goes in `selftest()`. A new *finding* goes in `validate()`, with the effect
+of its fix in `fixes.js`.
 
 ## Where tests live
 
@@ -56,8 +72,8 @@ The logic assertions live in `selftest()` in `src/selftest.js`, not in `test/`. 
 deliberate: it keeps `index.html#selftest` and `npm test` running the *same* assertions, so
 they cannot drift, and it means the tests work with no tooling at all.
 
-`selftest(fixtures)` is a pure function - it takes the two fixture texts and returns
-structured results. `test/logic.test.mjs` loads only the pure sources and formats those
+`selftest(fixtures)` is a pure function - it takes `{ csv }`, the bundled example text from
+the `sample-csv` block in `index.html`, and returns structured results. `test/logic.test.mjs` loads only the pure sources and formats those
 results, so there is no DOM shim to keep in step. The browser renders the same results
 through `renderSelftest()`. If you ever want to add a `document` stub to the Node harness,
 that is the signal that DOM access has leaked into a pure file - fix the source, not the

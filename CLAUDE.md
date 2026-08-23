@@ -13,8 +13,9 @@ Do not break these without being asked explicitly:
    which is why load order in `index.html` is load-bearing.
 2. **No runtime dependencies beyond `vendor/`, and no network requests.** Users open this
    with confidential plans in it. Third-party code is vendored with its licence. CI fails on
-   any remote `.js` / `.css` reference. Adding a new dependency needs an explicit decision,
-   not a drive-by `npm install` — see "Dependency decisions" below.
+   any remote `.js` / `.css` reference. There are two vendored bundles (three packages:
+   Frappe Gantt; Preact + htm). Adding another needs an explicit decision, not a drive-by
+   `npm install` — see "Dependency decisions" below.
 3. **Examples stay synthetic.** `examples/*.csv` is invented data. Never commit real client
    plans. CI greps for names from the original board. `.gitignore` excludes `timeline.csv`
    and `plan.csv` at the repo root plus `*.local.csv` — if the user drops a real plan in the
@@ -108,6 +109,20 @@ The panels are Preact components via `htm` (no JSX, no build step; global `htmPr
 3. Components are deliberately dumb — props in, vnode out, no component state. All state is
    in `App`; all mutation goes through `commit()`.
 
+## Two things that both sound like "checking"
+
+Do not confuse these. They are unrelated and the names are unhelpfully similar:
+
+| | `selftest()` in `src/selftest.js` | `validate()` in `src/validate.js` |
+|---|---|---|
+| Question it answers | is the *code* correct? | is this *plan* self-consistent? |
+| Runs against | the bundled synthetic example only | whatever plan the user has loaded |
+| When | `npm test`, or `index.html#selftest` | every render |
+| Output | pass/fail assertions | findings in the Validation tab, with fixes |
+
+`selftest()` is the test suite and never sees a user's plan. `validate()` is a product
+feature. A new assertion goes in `selftest()`; a new *finding* goes in `validate()`.
+
 ## Testing
 
 ```
@@ -118,8 +133,9 @@ npm run test:all
 
 Logic assertions live in `selftest()` in `src/selftest.js`, **not** in `test/`. This is
 deliberate: `index.html#selftest` and `npm test` then run the same assertions and cannot
-drift. `selftest(fixtures)` is pure — it takes the two fixture texts and returns structured
-results; the browser renders them via `renderSelftest()` in `src/ui.js`.
+drift. `selftest(fixtures)` is pure — it takes `{ csv }`, the bundled example text from the
+`sample-csv` block in `index.html`, and returns structured results; the browser renders them
+via `renderSelftest()` in `src/ui.js`.
 
 - Parsing / calendar / scheduling / validation / fixes → add `eq(...)` to a `section()` in
   `selftest()`.
