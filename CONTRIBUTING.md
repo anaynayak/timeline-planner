@@ -46,9 +46,11 @@ CI runs both suites plus a hygiene job on every push and pull request.
    reasoning for each - plus for the ones that were turned down - is recorded under
    "Dependency decisions" in `CLAUDE.md`. Adding another is a decision to discuss, not a
    drive-by.
-3. **Examples stay synthetic.** `examples/*.csv` must be invented data. CI greps for names
-   from the real board this was written against. Never commit a client plan; `.gitignore`
-   already excludes `timeline.csv` and `plan.csv` at the repo root and `*.local.csv`.
+3. **Examples stay synthetic.** `examples/*.csv` must be invented data, and CI fails if a
+   `.csv` or `.tsv` is tracked anywhere outside `examples/`. Never commit a client plan;
+   `.gitignore` already excludes `timeline.csv` and `plan.csv` at the repo root and
+   `*.local.csv`. The check is deliberately structural rather than a list of names to grep
+   for - a repository should not contain the names it is trying to keep out.
 4. **Every behaviour change ships with an assertion.** See below for where they go.
 
 ## `selftest()` is a test suite, not input validation

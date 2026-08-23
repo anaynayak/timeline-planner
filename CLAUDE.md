@@ -17,7 +17,7 @@ Do not break these without being asked explicitly:
    Frappe Gantt; Preact + htm). Adding another needs an explicit decision, not a drive-by
    `npm install` — see "Dependency decisions" below.
 3. **Examples stay synthetic.** `examples/*.csv` is invented data. Never commit real client
-   plans. CI greps for names from the original board. `.gitignore` excludes `timeline.csv`
+   plans. CI fails if any `.csv`/`.tsv` is tracked outside `examples/`. `.gitignore` excludes `timeline.csv`
    and `plan.csv` at the repo root plus `*.local.csv` — if the user drops a real plan in the
    working tree, leave it uncommitted.
 4. **Behaviour changes ship with an assertion.** See "Testing" below.

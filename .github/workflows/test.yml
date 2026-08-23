@@ -62,6 +62,26 @@ jobs:
           sys.exit(1 if fail else 0)
           PY
 
+      - name: No plan data outside examples/
+        run: |
+          # Guards the same risk the old version did - a real plan getting committed - but
+          # structurally instead of by name. The previous check grepped for a hardcoded list
+          # of client codenames, which meant the repository contained, in plaintext, the very
+          # names it existed to keep out. That is worse than no check on a repo that might
+          # ever be published, and it is not CI's job to know client names.
+          #
+          # A real plan arrives as a delimited file. Only examples/ may hold one, and
+          # .gitignore already covers the usual drop spots (timeline.csv, plan.csv,
+          # *.local.csv). Anything tracked elsewhere is a mistake.
+          stray=$(git ls-files '*.csv' '*.tsv' | grep -v '^examples/' || true)
+          if [ -n "$stray" ]; then
+            echo "::error::plan data tracked outside examples/: $stray"
+            exit 1
+          fi
+          # and the two examples are the only ones, so a third is a deliberate act to review
+          count=$(git ls-files 'examples/*.csv' | wc -l | tr -d ' ')
+          echo "no plan data outside examples/ ($count example files)"
+
       - name: Vendored licence and attribution are present
         run: |
           test -f NOTICE || { echo "::error::NOTICE is missing"; exit 1; }
