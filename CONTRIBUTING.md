@@ -81,7 +81,7 @@ broke once; the comment at the top of the file lists them.
 | `dates.js` | local-midnight `Date` helpers, `YYYY-MM-DD` strings | yes |
 | `calendar.js` | the working-day index: real date <-> integer working-day number | yes |
 | `workday-space.js` | the synthetic-date transform the chart is drawn in | yes |
-| `formats.js` | CSV / TSV / Miro-markdown read+write, column aliases, dependency resolution | yes |
+| `formats.js` | delimited text in, CSV + TSV out, column aliases, dependency resolution | yes |
 | `scheduler.js` | topological sort, ASAP pass, rigid shift, float/critical path, weekly load | yes |
 | `validate.js` | findings, and the fix `kind` each one offers | yes |
 | `fixes.js` | what each fix `kind` actually does | yes |

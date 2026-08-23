@@ -24,7 +24,7 @@ Do not break these without being asked explicitly:
 ## Layout
 
 ```
-index.html    markup, styles, the bundled example CSV, the Miro-markdown test fixture
+index.html    markup, styles, the bundled example CSV fixture
 src/          the app, as ordered classic scripts (see the table below)
 vendor/       Frappe Gantt 1.2.2 (MIT), htm+Preact standalone (MIT / Apache-2.0)
 examples/     synthetic example plans
@@ -36,7 +36,7 @@ test/         headless runners (logic.test.mjs, browser.test.mjs)
 | `src/dates.js` | local-midnight `Date` helpers, `YYYY-MM-DD` strings | yes |
 | `src/calendar.js` | the working-day index: real date <-> integer working-day number | yes |
 | `src/workday-space.js` | the synthetic-date transform the chart is drawn in | yes |
-| `src/formats.js` | CSV / TSV / Miro markdown read+write, column aliases, dependency resolution | yes |
+| `src/formats.js` | delimited text in, CSV + TSV out, column aliases, dependency resolution | yes |
 | `src/scheduler.js` | topo sort, ASAP, rigid propagation, float, weekly load | yes |
 | `src/validate.js` | findings and the fix `kind` each one offers | yes |
 | `src/fixes.js` | what each fix `kind` actually does | yes |

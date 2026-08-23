@@ -25,8 +25,8 @@ modules, no bundler — so it works straight from `file://`. Everything happens 
 and **nothing is sent over the network**: both libraries are vendored locally rather than
 pulled from a CDN.
 
-Drop a `.csv` on the window to load it, or use **Open file**. Two synthetic examples are in
-[`examples/`](examples):
+Drop a `.csv` or `.tsv` on the window to load it, or use **Open file**. Two synthetic
+examples are in [`examples/`](examples):
 
 | File | Shows |
 |---|---|
@@ -38,8 +38,8 @@ excludes `timeline.csv` and `plan.csv` at the root, and `*.local.csv`.
 
 ## Input format
 
-CSV with a header row. Columns are matched to canonical fields by alias, so an existing file
-usually loads as-is:
+Delimited text with a header row — comma or tab, sniffed automatically. Columns are matched
+to canonical fields by alias, so an existing file usually loads as-is:
 
 | Field | Accepted column names |
 |---|---|
@@ -66,16 +66,22 @@ Other details worth knowing:
   contain commas (`Counter, shelving and seating`), comma-separated lists are resolved by
   greedy longest-name matching rather than a naive split. Anything unresolvable is reported,
   never silently dropped. The export writes back in whichever style the file used.
-- **Dates** accept `YYYY-MM-DD`, full ISO with time/Z, `YYYY/MM/DD` and `DD/MM/YYYY`. The
-  export re-uses the source format.
+- **Dates** accept `YYYY-MM-DD`, full ISO with time/Z, `YYYY/MM/DD` and `DD/MM/YYYY`. These
+  are whole-day fields, so output is always a plain date — a timestamped input is read and
+  written back as `2027-03-01`, never echoed with a time component, because a spreadsheet
+  will not read `2027-03-01T00:00:00.000Z` as a date. Day-first files stay day-first.
 - **Duration precedence**: an explicit `duration` column wins; else the `start_date` to
   `end_date` span; else `estimate`; else 1 day.
 - **Formula quoting**: spreadsheet exports wrap formula-looking values in single quotes, so a
   task named `% Split` can arrive as `'% Split'` in one column and bare in another. Both are
   recognised as the same task, and the quoting is re-applied on export.
-- A **Miro Timeline markdown export** is also accepted, detected by content. Its Mon–Sun bars
-  are normalised to real working days on import, and **Copy for Miro** snaps them back to
-  whole weeks so the table can be pasted onto a board.
+- **Delimiter sniffing** considers only comma and tab. `;` is deliberately excluded: it is a
+  legal dependency separator *inside* a cell, so treating it as a delimiter would shred
+  perfectly good CSV files.
+- **Weekend end dates** are pulled back to the last working day they actually cover, so a
+  plan drawn across whole calendar weeks still yields working-day durations.
+- **Supported dates run 2015 to 2050.** A plan outside that window is refused by name on
+  load rather than silently snapped to the start of the range.
 
 ## What `estimate` means
 
@@ -116,7 +122,10 @@ Saturday.
 
 - **Download CSV** — same columns, same order, pass-through columns intact, true working-day
   dates. Re-importing is idempotent.
-- **Copy for Miro** — a markdown table with Mon–Sun week snapping and Miro's escaping.
+- **Copy for Excel** — the same table, tab separated, on the clipboard. Excel and Sheets
+  only split *pasted* text on tabs, so this drops straight into cells; pasting CSV would put
+  each whole row in one cell. A tab or newline inside a cell collapses to a space, because
+  there is no quoting convention Excel honours in pasted text.
 
 Edits autosave to `localStorage`, so a refresh does not lose work; **Reset** returns to the
 bundled example. Undo/redo is <kbd>Cmd/Ctrl</kbd>+<kbd>Z</kbd>.
@@ -166,7 +175,7 @@ src/                the app, as ordered classic <script> files - no bundler
   dates.js            date helpers
   calendar.js         the working-day index
   workday-space.js    the synthetic-date transform the chart is drawn in
-  formats.js          CSV / TSV / Miro-markdown read and write, column aliases
+  formats.js          delimited text in, CSV + TSV out, column aliases
   scheduler.js        topological sort, ASAP, rigid propagation, float, load
   validate.js         findings, and the fix each one offers
   fixes.js            what each fix does
