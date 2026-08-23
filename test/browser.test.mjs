@@ -32,9 +32,16 @@ const errors = [];
 page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 page.on('pageerror', (e) => errors.push('PAGEERROR ' + e.message));
 
+/* Reset to the bundled example. localStorage.clear() also drops the "tour seen" flag, so
+ * the flag is re-stamped before the reload - otherwise the first-run tour opens here and
+ * its overlay swallows every click for the rest of the suite. The tour group below clears
+ * the flag deliberately. */
 const boot = async (mode) => {
   await page.goto(APP, { waitUntil: 'load' });
-  await page.evaluate(() => localStorage.clear());
+  await page.evaluate(() => {
+    localStorage.clear();
+    localStorage.setItem('miro-timeline:seen-intro', '1');
+  });
   await page.reload({ waitUntil: 'load' });
   await page.waitForSelector('#gantt .bar-wrapper');
   await page.evaluate(() => window.__asap());
@@ -206,6 +213,76 @@ await page.click('#btn-undo');
 await page.waitForTimeout(250);
 check('undo restores the previous mapping',
   (await page.evaluate(() => window.App.doc.tasks.find((t) => t.id === 'survey').estimate)) === 5);
+
+/* ---------------------------------------------------------------- onboarding */
+/* A first-time visitor used to land on a fully populated chart of invented data with
+ * nothing saying so, and no hint that bars are draggable or that the axis skips weekends.
+ * A driver.js tour now points at the real controls on a first visit. */
+group('first-run tour');
+await page.goto(APP, { waitUntil: 'load' });
+await page.evaluate(() => localStorage.clear());
+await page.reload({ waitUntil: 'load' });
+await page.waitForSelector('#gantt .bar-wrapper');
+await page.waitForSelector('.driver-popover', { timeout: 5000 });
+check('the tour starts on a first visit', (await page.locator('.driver-popover').count()) === 1);
+
+check('the bundled plan is labelled as an example, not as your file',
+  (await page.locator('#file-name').getAttribute('class') || '').includes('example')
+  && /example/i.test(await page.locator('#file-name').innerText()),
+  await page.locator('#file-name').innerText());
+/* the download name comes from App.fileName, so the label must not leak into it */
+check('the example label does not leak into the download filename',
+  /^example-plan\.csv$/.test(await page.evaluate(() => window.App.fileName)),
+  await page.evaluate(() => window.App.fileName));
+
+/* Walk the whole tour. Two things are asserted per step: the spotlight actually moves,
+ * and exactly one element carries .driver-active-element - driver.js adds that class but
+ * never removes it from the previous target, and it is what grants pointer-events, so
+ * without the cleanup hook every visited control stays live behind the overlay. */
+const seen = [], titles = [];
+for (let i = 0; i < 12; i++) {
+  const st = await page.evaluate(() => ({
+    active: [...document.querySelectorAll('.driver-active-element')].map((e) => e.id || e.tagName),
+    title: (document.querySelector('.driver-popover-title') || {}).innerText || '',
+  }));
+  seen.push(st.active);
+  titles.push(st.title);
+  const next = page.locator('.driver-popover-next-btn');
+  if (!(await next.count())) break;
+  const last = (await next.innerText()) === 'Done';
+  await next.click();
+  await page.waitForTimeout(220);
+  if (last) break;
+}
+check('the tour has more than one step', titles.length >= 5, String(titles.length));
+check('every step highlights exactly one element',
+  seen.every((a) => a.length === 1), JSON.stringify(seen));
+check('the spotlight moves rather than accumulating',
+  new Set(seen.map((a) => a[0])).size === seen.length, JSON.stringify(seen.map((a) => a[0])));
+check('the tour covers the chart, the task list and the export',
+  seen.flat().includes('gantt') && seen.flat().includes('gutter')
+  && seen.flat().includes('btn-download'), JSON.stringify(seen.flat()));
+check('the tour explains the working-day axis somewhere',
+  titles.join(' ').toLowerCase().includes('working day'), titles.join(' | '));
+
+await page.waitForTimeout(250);
+check('finishing removes the popover', (await page.locator('.driver-popover').count()) === 0);
+check('finishing leaves no element marked active',
+  (await page.evaluate(() => document.querySelectorAll('.driver-active-element').length)) === 0);
+
+await page.reload({ waitUntil: 'load' });
+await page.waitForSelector('#gantt .bar-wrapper');
+await page.waitForTimeout(400);
+check('the tour does not run again on the next visit',
+  (await page.locator('.driver-popover').count()) === 0);
+await page.click('#btn-help');
+await page.waitForTimeout(300);
+check('the ? button restarts it', (await page.locator('.driver-popover').count()) === 1);
+await page.keyboard.press('Escape');
+await page.waitForTimeout(300);
+check('Escape leaves the tour', (await page.locator('.driver-popover').count()) === 0);
+check('leaving the tour restores interaction',
+  (await page.evaluate(() => document.querySelectorAll('.driver-active-element').length)) === 0);
 
 /* ---------------------------------------------------------------- theming */
 /* Light and dark are a token swap. The explicit toggle must beat the OS setting in BOTH

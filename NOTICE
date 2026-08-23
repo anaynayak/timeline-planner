@@ -50,3 +50,30 @@ Frappe Gantt: no network requests, works offline.
 
 Copyright (c) 2015-present Jason Miller (Preact), MIT License.
 Copyright (c) 2018 Jason Miller (htm), Apache License 2.0.
+
+
+driver.js
+---------
+The first-run guided tour is **driver.js** by Kamran Ahmed - a dependency-free library
+that dims the page, spotlights one element at a time and anchors a popover to it. Nothing
+on this page is guessable from looking at it, and pointing at the real control teaches it
+far better than a paragraph does. Thank you to Kamran and its contributors.
+
+  Project:  https://github.com/kamranahmedse/driver.js
+  Homepage: https://driverjs.com
+  Version:  1.8.0
+  Licence:  MIT
+  Files:    vendor/driver.iife.js
+            vendor/driver.css
+  Licence text: vendor/driver.LICENSE.txt
+
+Unmodified copies of the `dist` output from npm `driver.js@1.8.0`, vendored rather than
+loaded from a CDN for the same reason as the others. Its stylesheet hard-codes colours and
+exposes no custom properties for them, so index.html re-skins the popover against this
+project's theme tokens.
+
+The two other well-known libraries in this space were ruled out on licensing:
+**Shepherd.js** and **intro.js** are both AGPL-3.0, which this MIT project cannot take on
+without either relicensing or buying a commercial exception.
+
+Copyright (c) Kamran Ahmed, MIT License.

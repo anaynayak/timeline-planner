@@ -7,6 +7,13 @@
 
 const LS_KEY = 'miro-timeline:doc';
 const LS_THEME = 'miro-timeline:theme';
+const LS_SEEN = 'miro-timeline:seen-intro';
+
+/* The bundled plan is invented data but loaded as "plan.csv", which reads as a file the
+ * viewer owns - a first-time visitor had no way to tell whose numbers were on screen.
+ * App.isExample drives a label in the toolbar. It is deliberately NOT folded into
+ * App.fileName, because that is also the download filename. */
+const EXAMPLE_NAME = 'example-plan.csv';
 
 /* The theme is a viewer preference, not part of the plan, so it lives in its own key.
  * That keeps it out of the undo stack (undo should not change your colours) and means
@@ -20,6 +27,14 @@ function applyTheme(theme) {
     if (App.theme === 'auto') localStorage.removeItem(LS_THEME);
     else localStorage.setItem(LS_THEME, App.theme);
   } catch (e) { /* quota or private mode - the theme just will not persist */ }
+}
+
+/** Has the viewer been shown the intro? Stored separately so Reset does not re-trigger it. */
+function introSeen() {
+  try { return localStorage.getItem(LS_SEEN) === '1'; } catch (e) { return true; }
+}
+function markIntroSeen() {
+  try { localStorage.setItem(LS_SEEN, '1'); } catch (e) { /* private mode - shown again */ }
 }
 
 function restoreTheme() {
@@ -36,6 +51,7 @@ const App = {
   selected: null,
   zoom: 'Day',
   theme: 'auto',
+  isExample: false,
   undoStack: [],
   redoStack: [],
   pendingDrag: null,
@@ -99,11 +115,12 @@ function restore() {
   } catch (e) { return null; }
 }
 
-function loadDoc(text, fileName) {
+function loadDoc(text, fileName, isExample) {
   const cal = makeCalendar([]);
   const doc = parseAny(text, fileName, cal);
   App.doc = doc;
   App.fileName = fileName || 'plan.csv';
+  App.isExample = !!isExample;
   App.selected = null;
   App.undoStack.length = 0;
   App.redoStack.length = 0;

@@ -106,6 +106,7 @@ broke once; the comment at the top of the file lists them.
 | `panels.js` | the gutter and four side panels, as Preact components | no |
 | `render.js` | Frappe Gantt wiring, `renderAll`, `viewOf` | no |
 | `ui.js` | toolbar, tabs, drag-and-drop, keyboard, boot | no |
+| `tour.js` | the first-run guided tour, on driver.js | no |
 | `testhooks.js` | `window.App` and `__*` helpers for the browser suite only | no |
 
 Adding a file means adding a `<script>` tag to `index.html`. CI fails if a module has no
@@ -173,6 +174,19 @@ tar xzf frappe-gantt-<version>.tgz
 cp package/dist/frappe-gantt.umd.js package/dist/frappe-gantt.css vendor/
 cp package/license.txt vendor/frappe-gantt.LICENSE.txt
 ```
+
+To bump driver.js:
+
+```
+npm pack driver.js@<version>
+tar xzf driver.js-<version>.tgz
+cp package/dist/driver.js.iife.js vendor/driver.iife.js
+cp package/dist/driver.css vendor/driver.css
+cp package/license vendor/driver.LICENSE.txt
+```
+
+Re-check the two gotchas in `CLAUDE.md` after a bump - the tour relies on working around
+both, and a fix upstream would make the workarounds dead code rather than harmless.
 
 To bump Preact or htm - note the app uses the single prebuilt bundle that htm ships, which
 already contains preact, preact/hooks and htm, so there is only one file to copy:

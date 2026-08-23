@@ -139,9 +139,12 @@ function wireUI() {
       done();
     }
   };
+  // driver.js handles its own overlay, keyboard and dismissal; we only own "seen" state
+  document.getElementById('btn-help').onclick = () => startTour();
+
   document.getElementById('btn-reset').onclick = () => {
     localStorage.removeItem(LS_KEY);
-    loadDoc(document.getElementById('sample-csv').textContent, 'plan.csv');
+    loadDoc(document.getElementById('sample-csv').textContent, EXAMPLE_NAME, true);
     toast('Reset to the bundled example');
   };
 
@@ -212,6 +215,10 @@ window.addEventListener('DOMContentLoaded', () => {
     renderAll();
     toast('Restored your local edits - "Reset" goes back to the file');
   } else {
-    loadDoc(document.getElementById('sample-csv').textContent, 'plan.csv');
+    loadDoc(document.getElementById('sample-csv').textContent, EXAMPLE_NAME, true);
   }
+  /* First visit only. Deferred a frame: driver.js measures the element it highlights, and
+   * on the very first paint the chart has not been laid out yet, so step 4 would get a
+   * zero-sized box. Marked seen when it ends, however it ends. */
+  if (!introSeen()) requestAnimationFrame(() => startTour());
 });

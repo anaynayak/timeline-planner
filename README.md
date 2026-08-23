@@ -9,10 +9,11 @@ working day, bars snap to whole calendar weeks regardless of the estimate, and t
 "blocked by" column is decorative text that nothing enforces. This fixes that, without
 becoming a project-management server.
 
-Gantt rendering is provided by **[Frappe Gantt](https://github.com/frappe/gantt)** (MIT) and
+Gantt rendering is provided by **[Frappe Gantt](https://github.com/frappe/gantt)** (MIT),
 the side panels by **[Preact](https://preactjs.com)** (MIT) +
-**[htm](https://github.com/developit/htm)** (Apache-2.0) — see [NOTICE](NOTICE). Both are
-vendored, not fetched.
+**[htm](https://github.com/developit/htm)** (Apache-2.0), and the first-run tour by
+**[driver.js](https://github.com/kamranahmedse/driver.js)** (MIT) — see [NOTICE](NOTICE).
+All are vendored, not fetched.
 
 ## Running it
 
@@ -24,6 +25,11 @@ No build step, no server, no install. It is plain HTML plus ordinary classic scr
 modules, no bundler — so it works straight from `file://`. Everything happens in the browser
 and **nothing is sent over the network**: both libraries are vendored locally rather than
 pulled from a CDN.
+
+On a first visit a short guided tour points at the parts that are not guessable — the
+working-day axis, dragging a bar, and the duration-versus-estimate column. Reopen it any
+time with **?** in the toolbar. The plan you land on is a synthetic example and is labelled
+as such, so it is never mistaken for your own data.
 
 Drop a `.csv` or `.tsv` on the window to load it, or use **Open file**. Two synthetic
 examples are in [`examples/`](examples):
@@ -197,9 +203,10 @@ src/                the app, as ordered classic <script> files - no bundler
   panels.js           the gutter and side panels, as Preact components
   render.js           Frappe Gantt wiring
   ui.js               toolbar, tabs, drag-and-drop, keyboard, boot
+  tour.js             the first-run guided tour
   testhooks.js        hooks for the browser suite; dropped from a deploy
 vendor/             Frappe Gantt 1.2.2 (MIT), htm + Preact (Apache-2.0 / MIT),
-                    vendored so there are no network calls
+                    driver.js 1.8.0 (MIT) - all vendored, no network calls
 examples/           synthetic example plans
 test/               headless test runners
 ```

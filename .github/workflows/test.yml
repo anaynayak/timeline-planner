@@ -67,13 +67,13 @@ jobs:
           test -f NOTICE || { echo "::error::NOTICE is missing"; exit 1; }
           fail=0
           # every vendored bundle needs its licence text on disk and a credit in NOTICE
-          for want in frappe-gantt.LICENSE.txt preact.LICENSE.txt htm.LICENSE.txt; do
+          for want in frappe-gantt.LICENSE.txt preact.LICENSE.txt htm.LICENSE.txt driver.LICENSE.txt; do
             test -f "vendor/$want" || { echo "::error::vendor/$want is missing"; fail=1; }
           done
-          for want in 'frappe/gantt' 'preactjs/preact' 'developit/htm'; do
+          for want in 'frappe/gantt' 'preactjs/preact' 'developit/htm' 'kamranahmedse/driver.js'; do
             grep -q "$want" NOTICE || { echo "::error::NOTICE does not credit $want"; fail=1; }
           done
-          for want in 'frappe/gantt' 'preactjs.com' 'developit/htm'; do
+          for want in 'frappe/gantt' 'preactjs.com' 'developit/htm' 'kamranahmedse/driver.js'; do
             grep -q "$want" index.html || { echo "::error::UI does not credit $want"; fail=1; }
           done
           test "$fail" = 0 || exit 1
@@ -135,11 +135,18 @@ jobs:
 
       - name: App makes no network requests
         run: |
-          # the tool must work offline; nothing may be pulled from a CDN.
-          # w3.org/2000/svg is the SVG XML namespace - an identifier, not a fetch.
-          if grep -nrE 'https?://[^"'"'"' ]*\.(js|css)' index.html src/ vendor/ \
-               | grep -v 'w3\.org' ; then
-            echo "::error::remote script or stylesheet referenced - vendor it instead"
+          # The tool must work offline. This targets things the browser would FETCH, not any
+          # URL that happens to appear: the credit line links to github.com/.../driver.js,
+          # whose repo name ends in .js, and an earlier "any URL ending .js/.css" pattern
+          # flagged it. Outbound <a href> links are fine; fetched assets are not.
+          bad=0
+          grep -nE '<(script|img|iframe|source)[^>]+src="https?://' index.html src/ vendor/ && bad=1
+          grep -nE '<link[^>]+href="https?://' index.html && bad=1
+          grep -nrE '@import[^;]*https?://' index.html src/ vendor/ && bad=1
+          # and nothing may reach the network at runtime either
+          grep -nrE '\b(fetch|XMLHttpRequest|EventSource|WebSocket)\s*\(' src/ && bad=1
+          if [ "$bad" = 1 ]; then
+            echo "::error::remote asset or network call found - vendor it / remove it"
             exit 1
           fi
-          echo "no remote assets referenced"
+          echo "no remote assets referenced, no network calls"

@@ -277,7 +277,12 @@ function renderToolbar() {
   const doc = App.doc, cal = App.cal;
   document.getElementById('proj-start').value = cal.at(cal.nextIdx(doc.projectStart));
   document.getElementById('team-size').value = doc.teamSize;
-  document.getElementById('file-name').textContent = App.fileName;
+  const nameEl = document.getElementById('file-name');
+  nameEl.textContent = App.fileName;
+  nameEl.classList.toggle('example', App.isExample);
+  nameEl.title = App.isExample
+    ? 'Synthetic example data, not a file of yours. Drop a .csv to replace it.'
+    : App.fileName;
   document.querySelectorAll('#seg-mode button').forEach((b) => b.classList.toggle('on', b.dataset.mode === doc.mode));
   document.querySelectorAll('#seg-zoom button').forEach((b) => b.classList.toggle('on', b.dataset.zoom === App.zoom));
   document.querySelectorAll('#seg-theme button').forEach((b) => b.classList.toggle('on', b.dataset.theme === App.theme));

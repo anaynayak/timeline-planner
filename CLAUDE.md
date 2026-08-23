@@ -46,6 +46,7 @@ test/         headless runners (logic.test.mjs, browser.test.mjs)
 | `src/panels.js` | the gutter and four side panels, as Preact components | no |
 | `src/render.js` | Frappe Gantt wiring, `renderAll`, `viewOf` | no |
 | `src/ui.js` | toolbar, tabs, drag-and-drop, keyboard, boot | no |
+| `src/tour.js` | the first-run guided tour, on driver.js | no |
 | `src/testhooks.js` | `window.App` + `__*` helpers for `test/browser.test.mjs` only | no |
 
 **The "pure" files must never touch `document`, `window`, `localStorage` or `Gantt`.**
@@ -151,6 +152,31 @@ And note the in-bar labels are hidden. No single ink is legible on all eight lig
 slots (white fails on yellow and aqua, dark ink fails on blue and violet), frappe was
 already hiding the ones too long to fit, and the gutter shows every name anyway.
 
+## driver.js gotchas
+
+The first-run tour is driver.js (global `driver.js.driver`). Two things bit:
+
+1. **`onDestroyed` never fires** in 1.8.0 — not on Done, not on Escape, not on the close
+   button. Its teardown only reaches the hook while `__activeElement` and `__activeStep` are
+   still set, and by then they are not. `onDestroyStarted` *does* fire, but taking it over
+   means owning the teardown: the library returns early without destroying, so you would
+   have to call `destroy()` yourself and guard the recursion that causes. So the tour is
+   marked seen **when it starts**, which is better behaviour anyway — somebody who opens it
+   and immediately closes it has been offered it.
+2. **It adds `.driver-active-element` but never removes it from the previous target.** That
+   class is what grants `pointer-events: auto`, so without cleanup every element the tour
+   has visited stays clickable behind the overlay — six of them by the last step. A single
+   `onHighlightStarted` strips the stale ones.
+
+Also: its stylesheet hard-codes colours and exposes no custom properties for them, so
+`index.html` re-skins the popover against our tokens — otherwise the tour is a white card in
+dark mode. And a step targeting something inside a hidden tab must reveal it first (the
+`showTab` key on a step) or driver.js measures a zero-sized box.
+
+**Test note:** `localStorage.clear()` drops the "tour seen" flag, so any test helper that
+clears storage must re-stamp it. `boot()` in the browser suite does; without that the tour
+opens and its overlay swallows every subsequent click.
+
 ## Preact gotchas
 
 The panels are Preact components via `htm` (no JSX, no build step; global `htmPreact`).
@@ -224,6 +250,12 @@ Recorded so they are not re-litigated. Runtime dependencies are vendored or refu
 - **A scheduling engine — does not exist.** `jsgantt-improved`, `dhtmlxGantt` and Frappe are
   renderers; working-day CPM with pinning and rigid propagation is only in commercial
   products. `src/scheduler.js` is legitimately ours. Don't go hunting.
+- **driver.js — adopted** for the first-run tour. MIT, zero dependencies, 25 kB IIFE + 3 kB
+  CSS, works from `file://`.
+- **Shepherd.js and intro.js — refused on licensing.** Both are AGPL-3.0. This project is
+  MIT; taking either would mean relicensing the whole thing or buying a commercial
+  exception. Check the licence before reaching for a tour library, because the two
+  best-known ones are copyleft.
 
 ## Conventions
 

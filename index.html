@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Timeline Planner</title>
 <link rel="stylesheet" href="vendor/frappe-gantt.css">
+<link rel="stylesheet" href="vendor/driver.css">
 <script>
   /* Stamp the saved theme before first paint. Inline and in <head> on purpose: the app
      scripts load at the end of <body>, so doing this there would flash the wrong theme.
@@ -43,6 +44,7 @@
     --on-accent: #ffffff;
     --sel-bg: #dce9fa;
     --drop-veil: rgba(252, 252, 251, .93);
+    --shadow: rgba(23, 23, 26, .18);
 
     /* status - reserved, never used as a series colour */
     --warn: #a8690a;
@@ -87,6 +89,7 @@
       --line: #2b303b; --line-strong: #3d444f; --line-2: #1b1f27;
       --fg: #e6e9ef; --fg-dim: #9aa3b2; --accent: #4c8dff; --on-accent: #ffffff;
       --sel-bg: #263041; --drop-veil: rgba(15, 17, 21, .92);
+      --shadow: rgba(0, 0, 0, .45);
       --warn: #d99b32; --warn-bg: #382c1a; --warn-fg: #f0bd6a;
       --err: #e05561; --err-bg: #3a1f23; --err-fg: #ff8f98;
       --ok: #4bb87c; --ok-bg: #1c3327; --ok-fg: #7fd6a3;
@@ -105,6 +108,7 @@
     --line: #2b303b; --line-strong: #3d444f; --line-2: #1b1f27;
     --fg: #e6e9ef; --fg-dim: #9aa3b2; --accent: #4c8dff; --on-accent: #ffffff;
     --sel-bg: #263041; --drop-veil: rgba(15, 17, 21, .92);
+    --shadow: rgba(0, 0, 0, .45);
     --warn: #d99b32; --warn-bg: #382c1a; --warn-fg: #f0bd6a;
     --err: #e05561; --err-bg: #3a1f23; --err-fg: #ff8f98;
     --ok: #4bb87c; --ok-bg: #1c3327; --ok-fg: #7fd6a3;
@@ -152,6 +156,10 @@
   .seg button.on { background: var(--accent); color: var(--on-accent); }
   .brand { font-weight: 600; letter-spacing: .2px; margin-right: 4px; }
   .brand small { color: var(--fg-dim); font-weight: 400; }
+  /* the bundled plan is invented data; say so where the filename would be */
+  .brand small.example::after { content: 'example'; margin-left: 6px; padding: 1px 6px;
+    border-radius: 999px; background: var(--warn-bg); color: var(--warn-fg);
+    font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .4px; }
   .credit { margin-left: auto; color: var(--fg-dim); font-size: 11px; }
   .credit a { color: var(--fg-dim); }
   .credit a:hover { color: var(--accent); }
@@ -272,6 +280,29 @@
   .gantt .lower-text, .gantt .upper-text { fill: var(--fg-dim); }
   .gantt .mon .lower-text { fill: var(--fg); }
 
+  /* ---------- guided tour (driver.js) ----------
+     driver.css hard-codes its colours and exposes no custom properties for them, so its
+     popover is re-skinned here against our tokens. Without this the tour is a white card
+     in dark mode. */
+  .driver-popover { background-color: var(--panel); color: var(--fg);
+    border: 1px solid var(--line); box-shadow: 0 12px 32px var(--shadow); }
+  .driver-popover-title { color: var(--fg); font-size: 15px; }
+  .driver-popover-description { color: var(--fg-dim); }
+  .driver-popover-progress-text { color: var(--fg-dim); }
+  .driver-popover-close-btn { color: var(--fg-dim); }
+  .driver-popover-close-btn:hover, .driver-popover-close-btn:focus { color: var(--fg); }
+  .driver-popover-footer-btn { background-color: var(--panel-2); color: var(--fg);
+    border: 1px solid var(--line); border-radius: 6px; padding: 4px 9px; }
+  .driver-popover-footer-btn:hover, .driver-popover-footer-btn:focus {
+    background-color: var(--panel-3); border-color: var(--line-strong); }
+  /* the arrow is a border trick, so it needs the panel colour on every side */
+  .driver-popover-arrow-side-left   { border-left-color: var(--panel); }
+  .driver-popover-arrow-side-right  { border-right-color: var(--panel); }
+  .driver-popover-arrow-side-top    { border-top-color: var(--panel); }
+  .driver-popover-arrow-side-bottom { border-bottom-color: var(--panel); }
+  .driver-popover code { background: var(--panel-2); border: 1px solid var(--line);
+    border-radius: 4px; padding: 0 4px; font-size: 12px; }
+
   /* ---------- dropzone ---------- */
   #drop {
     position: fixed; inset: 0; background: var(--drop-veil); z-index: 50;
@@ -352,12 +383,14 @@
     <button id="btn-download">Download CSV</button>
     <button id="btn-copy" title="Tab separated, so it pastes straight into spreadsheet cells">Copy for Excel</button>
     <button id="btn-reset" title="Discard local edits and reload the bundled file">Reset</button>
+    <button id="btn-help" title="Take the tour again (shown automatically on a first visit)">?</button>
     <input type="file" id="file-input" accept=".csv,.tsv,.txt" hidden>
   </div>
   <div class="grp credit">
     Gantt by <a href="https://github.com/frappe/gantt" target="_blank" rel="noopener noreferrer">Frappe Gantt</a> (MIT),
     panels by <a href="https://preactjs.com" target="_blank" rel="noopener noreferrer">Preact</a> (MIT)
-    + <a href="https://github.com/developit/htm" target="_blank" rel="noopener noreferrer">htm</a> (Apache-2.0)
+    + <a href="https://github.com/developit/htm" target="_blank" rel="noopener noreferrer">htm</a> (Apache-2.0),
+    tour by <a href="https://github.com/kamranahmedse/driver.js" target="_blank" rel="noopener noreferrer">driver.js</a> (MIT)
   </div>
 </div>
 
@@ -408,6 +441,8 @@ open,Public opening,,Launch,2027-05-17,2027-05-21,5,Ada,high,Soft launch week
 <!-- preact + hooks + htm in one prebuilt UMD bundle, global `htmPreact`. Classic script,
      so it works from file:// with no import map and no bundler. -->
 <script src="vendor/htm-preact.umd.js"></script>
+<!-- driver.js: the guided tour. Classic IIFE, global `driver.js.driver`, no dependencies. -->
+<script src="vendor/driver.iife.js"></script>
 
 <!-- Ordered classic scripts sharing one global scope: no build step, no ES modules, so
      this page still works opened straight from file://. Load order is load-bearing.
@@ -425,6 +460,7 @@ open,Public opening,,Launch,2027-05-17,2027-05-21,5,Ada,high,Soft launch week
 <script src="src/panels.js"></script>
 <script src="src/render.js"></script>
 <script src="src/ui.js"></script>
+<script src="src/tour.js"></script>
 <script src="src/testhooks.js"></script>
 </body>
 </html>
