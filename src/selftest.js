@@ -13,6 +13,7 @@
  *  results, so the identical assertions run under Node with no DOM shim at all and in the
  *  browser via renderSelftest(). Add new assertions here, never in test/. */
 function selftest(fixtures) {
+  const YMD_OK = (v) => /^\d{4}-\d{2}-\d{2}$/.test(v);
   const results = [];
   let pass = 0, fail = 0;
   const eq = (name, got, want) => {
@@ -429,6 +430,93 @@ function selftest(fixtures) {
     return ancestors(c, 'survey').size > 0;
   })(), true);
   eq('an unknown id has no ancestors', ancestors(s7, 'nope').size, 0);
+
+  section('share links: fragment parsing');
+  eq('reads the payload out of a hash', sharePayloadFromHash('#plan=AbC-_123'), 'AbC-_123');
+  eq('tolerates a missing leading hash', sharePayloadFromHash('plan=xyz'), 'xyz');
+  eq('ignores other fragment keys', sharePayloadFromHash('#foo=1&plan=abc&bar=2'), 'abc');
+  eq('no hash means no payload', sharePayloadFromHash(''), null);
+  eq('a bare hash means no payload', sharePayloadFromHash('#'), null);
+  eq('an unrelated fragment is not a payload', sharePayloadFromHash('#selftest'), null);
+  eq('an empty value is not a payload', sharePayloadFromHash('#plan='), null);
+  eq('a key that merely ends in plan does not match', sharePayloadFromHash('#myplan=abc'), null);
+
+  section('share links: base64url');
+  eq('round trips bytes', (() => {
+    const b = new Uint8Array([0, 1, 250, 255, 128, 64, 13, 10]);
+    return [...b64urlDecode(b64urlEncode(b))];
+  })(), [0, 1, 250, 255, 128, 64, 13, 10]);
+  eq('uses no characters that need URL escaping',
+    /^[A-Za-z0-9_-]*$/.test(b64urlEncode(new Uint8Array([251, 255, 254, 253, 63, 62]))), true);
+  eq('emits no padding', b64urlEncode(new Uint8Array([1])).includes('='), false);
+  eq('decodes an unpadded payload of every length mod 4', [1, 2, 3, 4, 5].every((n) => {
+    const b = new Uint8Array(n).map((_, i) => i * 37 % 256);
+    return [...b64urlDecode(b64urlEncode(b))].join() === [...b].join();
+  }), true);
+
+  section('share links: rejecting untrusted input');
+  const shareOf = (doc) => ({ v: 1, doc });
+  const good = load(csv, 'plan.csv');
+  eq('a well formed payload survives', (() => {
+    const out = sanitizeSharedDoc(shareOf(good));
+    return { n: out.tasks.length, mode: out.mode, team: out.teamSize };
+  })(), { n: 16, mode: 'rigid', team: 4 });
+  eq('a version mismatch is refused', (() => {
+    try { sanitizeSharedDoc({ v: 99, doc: good }); return 'accepted'; }
+    catch (e) { return /different version/i.test(e.message); }
+  })(), true);
+  eq('a payload with no tasks is refused', (() => {
+    try { sanitizeSharedDoc(shareOf({ tasks: [] })); return 'accepted'; }
+    catch (e) { return /no tasks/i.test(e.message); }
+  })(), true);
+  eq('junk is refused', (() => {
+    try { sanitizeSharedDoc(null); return 'accepted'; }
+    catch (e) { return /no plan/i.test(e.message); }
+  })(), true);
+  // a dependency on an id the link does not carry would wedge the scheduler
+  eq('dangling dependencies are dropped', sanitizeSharedDoc(shareOf({
+    header: ['name'], srcHeader: ['name'], tasks: [
+      { id: 'a', name: 'A', deps: ['ghost', 'b'] }, { id: 'b', name: 'B', deps: [] }],
+  })).tasks[0].deps, ['b']);
+  eq('a self dependency is dropped', sanitizeSharedDoc(shareOf({
+    header: ['name'], srcHeader: ['name'], tasks: [{ id: 'a', name: 'A', deps: ['a'] }],
+  })).tasks[0].deps, []);
+  eq('duplicate ids are made unique', sanitizeSharedDoc(shareOf({
+    header: ['name'], srcHeader: ['name'],
+    tasks: [{ id: 'a', name: 'A' }, { id: 'a', name: 'Also A' }],
+  })).tasks.map((t) => t.id), ['a', 'a-2']);
+  eq('a hostile duration is clamped to a working day', sanitizeSharedDoc(shareOf({
+    header: ['name'], srcHeader: ['name'],
+    tasks: [{ id: 'a', name: 'A', duration: -5 }, { id: 'b', name: 'B', duration: 1e9 }],
+  })).tasks.map((t) => t.duration), [1, 1000000000]);
+  eq('a non-numeric duration falls back to 1', sanitizeSharedDoc(shareOf({
+    header: ['name'], srcHeader: ['name'], tasks: [{ id: 'a', name: 'A', duration: 'lots' }],
+  })).tasks[0].duration, 1);
+  eq('a malformed start date falls back rather than reaching the calendar',
+    YMD_OK(sanitizeSharedDoc(shareOf({
+      header: ['name'], srcHeader: ['name'], tasks: [{ id: 'a', name: 'A', start: 'whenever' }],
+    })).tasks[0].start), true);
+  eq('an unknown mode falls back to rigid', sanitizeSharedDoc(shareOf({
+    header: ['name'], srcHeader: ['name'], mode: 'chaos', tasks: [{ id: 'a', name: 'A' }],
+  })).mode, 'rigid');
+  eq('a nonsense team size falls back', sanitizeSharedDoc(shareOf({
+    header: ['name'], srcHeader: ['name'], teamSize: -3, tasks: [{ id: 'a', name: 'A' }],
+  })).teamSize, 4);
+  eq('non-string extras are coerced, not trusted', sanitizeSharedDoc(shareOf({
+    header: ['name'], srcHeader: ['name'],
+    tasks: [{ id: 'a', name: 'A', extra: { owner: { evil: true } } }],
+  })).tasks[0].extra.owner, '[object Object]');
+  eq('an array masquerading as extras is ignored', sanitizeSharedDoc(shareOf({
+    header: ['name'], srcHeader: ['name'], tasks: [{ id: 'a', name: 'A', extra: ['x'] }],
+  })).tasks[0].extra, {});
+  eq('ragged source rows are padded to the header width', sanitizeSharedDoc(shareOf({
+    header: ['a', 'b', 'c'], srcHeader: ['a', 'b', 'c'], srcRows: [['1'], ['1', '2', '3', '4']],
+    tasks: [{ id: 'x', name: 'X' }],
+  })).srcRows, [['1', '', ''], ['1', '2', '3']]);
+  eq('holidays that are not dates are dropped', sanitizeSharedDoc(shareOf({
+    header: ['name'], srcHeader: ['name'], holidays: ['2027-03-03', 'soon', ''],
+    tasks: [{ id: 'a', name: 'A' }],
+  })).holidays, ['2027-03-03']);
 
   section('workday space transform');
   eq('index 0 maps to the synthetic epoch', synthYmd(0), '2000-01-03');

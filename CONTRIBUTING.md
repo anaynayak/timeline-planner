@@ -103,6 +103,7 @@ broke once; the comment at the top of the file lists them.
 | `scheduler.js` | topological sort, ASAP pass, rigid shift, float/critical path, weekly load | yes |
 | `validate.js` | findings, and the fix `kind` each one offers | yes |
 | `fixes.js` | what each fix `kind` actually does | yes |
+| `share.js` | the share-link codec: doc <-> URL fragment | yes |
 | `selftest.js` | the logic assertions | yes |
 | `store.js` | `App` state, `commit()`, undo/redo, `localStorage` | no |
 | `panels.js` | the gutter and four side panels, as Preact components | no |

@@ -18,7 +18,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
  * index.html loads them. Keep this list in step with the <script> tags there. */
 const PURE = [
   'dates.js', 'calendar.js', 'workday-space.js', 'formats.js',
-  'scheduler.js', 'validate.js', 'fixes.js', 'selftest.js',
+  'scheduler.js', 'validate.js', 'fixes.js', 'share.js', 'selftest.js',
 ];
 
 const html = readFileSync(join(ROOT, 'index.html'), 'utf8');
@@ -49,7 +49,16 @@ if (impure.length) {
   process.exit(1);
 }
 
-const sandbox = { console };
+/* A bare vm context has the JS built-ins but no Web APIs. share.js uses the standard
+ * compression and encoding globals - present in both browsers and Node - so they are handed
+ * in explicitly. They are NOT DOM access: the purity guard above still bans document,
+ * window, localStorage and Gantt. */
+const sandbox = {
+  console,
+  TextEncoder, TextDecoder, Response, Uint8Array,
+  CompressionStream, DecompressionStream,
+  btoa, atob,
+};
 sandbox.globalThis = sandbox;
 vm.createContext(sandbox);
 for (const f of PURE) {

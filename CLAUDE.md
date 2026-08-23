@@ -41,6 +41,7 @@ test/         headless runners (logic.test.mjs, browser.test.mjs)
 | `src/scheduler.js` | topo sort, ASAP, rigid propagation, float, weekly load | yes |
 | `src/validate.js` | findings and the fix `kind` each one offers | yes |
 | `src/fixes.js` | what each fix `kind` actually does | yes |
+| `src/share.js` | the share-link codec: doc <-> URL fragment | yes |
 | `src/selftest.js` | the logic assertions | yes |
 | `src/store.js` | `App` state, `commit()`, undo/redo, `localStorage` | no |
 | `src/panels.js` | the gutter and four side panels, as Preact components | no |
@@ -122,6 +123,35 @@ rather than reusing a hue, because two tags sharing a colour is a worse lie than
 having none — and the Columns legend says so when it happens. Identity never rests on
 colour anyway: the task name is always visible in the gutter. That is also the "relief"
 that licenses three light-mode slots sitting below 3:1 against the surface.
+
+## Share links
+
+A whole plan encodes into the URL fragment so a link can be sent instead of a CSV.
+
+- **The fragment, never the query string.** Everything after `#` is stripped before a request
+  is sent and is absent from `Referer`, so the plan never reaches a server even when hosted.
+  A query string would put confidential plans in an access log and break the promise the
+  whole tool rests on. Do not "tidy" this into `?plan=`.
+- **`srcRows` is included on purpose.** It is about a third of the payload and it is tempting
+  to drop, but it is *not* reconstructible: a mapped column whose text did not survive
+  normalisation lives only there. An `estimate` cell reading `TBD` becomes `null` on the
+  task, and re-mapping that column is meant to hand `TBD` back as a pass-through value -
+  regenerating rows from tasks yields `""`. Dropping it would make re-mapping a shared plan
+  silently lossy, and would mean maintaining a second serialisation schema alongside
+  `buildDoc` forever. ~760 characters is a cheap price.
+- **Decoded input is untrusted.** `sanitizeSharedDoc` rebuilds the document field by field.
+  It drops dangling and self dependencies (either wedges the scheduler), makes duplicate ids
+  unique, clamps durations, and refuses a version mismatch. Never feed a decoded payload
+  straight into `adoptDoc`.
+- **A share link is a same-document navigation.** Pasting one while already on the page only
+  changes the fragment: the browser fires `hashchange` and never reloads, so the boot handler
+  does not run. There is a `hashchange` listener for exactly this; without it, opening a link
+  from the page you are already on silently does nothing.
+- **`CompressionStream`'s writer promises reject too.** `write()` and `close()` both reject
+  when the stream errors, which is what a corrupted payload does. Unhandled, that is two
+  unhandled rejections per bad link even though the read side is correctly caught - hence the
+  `.catch(() => {})` on both in `deflateRaw`/`inflateRaw`.
+- A `file://` link cannot be shared, and the toast says so rather than pretending.
 
 ## Frappe Gantt gotchas
 

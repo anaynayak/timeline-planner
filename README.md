@@ -135,6 +135,14 @@ Saturday.
   each whole row in one cell. A tab or newline inside a cell collapses to a space, because
   there is no quoting convention Excel honours in pasted text.
 
+- **Copy link** — a URL with the whole plan encoded into it, so you can send a link instead
+  of a file. The recipient opens it and sees exactly your plan, edits included. The payload
+  lives in the URL **fragment**, which browsers never send to a server and omit from
+  `Referer` headers, so hosting the page does not mean the plans pass through it. A 16-task
+  plan comes to about 1,950 characters. Two things worth knowing: the plan travels *inside*
+  the link, so a link is as sensitive as the CSV; and a `file://` link cannot be shared, so
+  this is only useful once the page is hosted.
+
 Edits autosave to `localStorage`, so a refresh does not lose work; **Reset** returns to the
 bundled example. Undo/redo is <kbd>Cmd/Ctrl</kbd>+<kbd>Z</kbd>.
 
@@ -200,6 +208,7 @@ src/                the app, as ordered classic <script> files - no bundler
   scheduler.js        topological sort, ASAP, rigid propagation, float, load
   validate.js         findings, and the fix each one offers
   fixes.js            what each fix does
+  share.js            share-link codec (plan <-> URL fragment)
   selftest.js         the logic assertions
   store.js            app state, commit(), undo/redo, localStorage
   panels.js           the gutter and side panels, as Preact components

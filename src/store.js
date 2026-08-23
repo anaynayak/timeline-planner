@@ -120,6 +120,20 @@ function restore() {
   } catch (e) { return null; }
 }
 
+/* Adopt an already-built document, as decoded from a share link. Deliberately not
+ * loadDoc(): there is no source text to parse, the document arrives complete. */
+function adoptDoc(doc, fileName) {
+  App.doc = doc;
+  App.fileName = fileName || 'shared-plan.csv';
+  App.isExample = false;
+  App.selected = null;
+  App.undoStack.length = 0;
+  App.redoStack.length = 0;
+  rebuildCal();
+  normalizeStarts();   // a link could carry a start that is not a working day here
+  renderAll();
+}
+
 function loadDoc(text, fileName, isExample) {
   const cal = makeCalendar([]);
   const doc = parseAny(text, fileName, cal);

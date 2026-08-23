@@ -210,6 +210,133 @@ await page.waitForTimeout(250);
 check('undo restores the previous mapping',
   (await page.evaluate(() => window.App.doc.tasks.find((t) => t.id === 'survey').estimate)) === 5);
 
+/* ---------------------------------------------------------------- share links */
+/* The plan travels in the URL fragment, which the browser never sends to a server. These
+ * check the round trip end to end, and that a link cannot wedge the app. */
+group('share links');
+await boot();
+const share = await page.evaluate(async () => {
+  const payload = await encodeShare(window.App.doc);
+  const back = await decodeShare(payload);
+  const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  return {
+    len: payload.length,
+    urlSafe: /^[A-Za-z0-9_-]+$/.test(payload),
+    tasksMatch: same(window.App.doc.tasks, back.tasks),
+    srcRowsMatch: same(window.App.doc.srcRows, back.srcRows),
+    headerMatch: same(window.App.doc.header, back.header),
+    mappingMatch: same(window.App.doc.mapping, back.mapping),
+  };
+});
+check('a plan round trips through the codec unchanged',
+  share.tasksMatch && share.headerMatch && share.mappingMatch, JSON.stringify(share));
+/* srcRows is kept deliberately: a mapped column whose text did not survive normalisation
+ * (an estimate reading "TBD") is recoverable only from it, so re-mapping a shared plan
+ * behaves exactly as it does for a local file. */
+check('the verbatim source rows survive, so re-mapping still works on a shared plan',
+  share.srcRowsMatch);
+check('the payload needs no URL escaping', share.urlSafe);
+check('the bundled example fits comfortably in a URL', share.len < 2500, share.len + ' chars');
+console.log(`       payload for 16 tasks: ${share.len} chars`);
+
+check('re-mapping a link-loaded plan is not degraded', await page.evaluate(async () => {
+  const doc = await decodeShare(await encodeShare(window.App.doc));
+  const nd = window.__buildDoc(doc.srcHeader, doc.srcRows, window.App.cal,
+    { mapping: Object.assign({}, doc.mapping, { estimate: -1 }) });
+  return nd.tasks.every((t) => t.estimate === null)
+    && nd.extras.map((i) => nd.header[i]).includes('estimate');
+}));
+
+/* Rendered into the fragment, never the query string - a query string would put the plan
+ * in a server access log the moment the page is hosted. */
+const sourceFindings = await page.evaluate(() =>
+  JSON.stringify(window.__validate().map((f) => [f.code, f.taskId])));
+const shareUrl = await page.evaluate(async () => {
+  const payload = await encodeShare(window.App.doc);
+  return `${location.href.split('#')[0]}#${SHARE_KEY}=${payload}`;
+});
+check('the link puts the plan after the # and leaves the query string empty',
+  new URL(shareUrl).hash.startsWith('#plan=') && new URL(shareUrl).search === '',
+  new URL(shareUrl).search || '(empty)');
+
+/* Open the link in a fresh page with unrelated saved edits, and the link must win. */
+await page.goto(APP, { waitUntil: 'load' });
+await page.evaluate(() => {
+  localStorage.setItem('miro-timeline:seen-intro', '1');
+  localStorage.setItem('miro-timeline:doc', JSON.stringify({
+    fileName: 'someone-elses.csv',
+    doc: { header: ['name'], srcHeader: ['name'], srcRows: [['Zzz']], mapping: {}, extras: [],
+      tasks: [{ id: 'zzz', name: 'Unrelated task', tags: [], estimate: 1, duration: 1,
+        start: '2027-03-01', deps: [], unresolved: [], extra: {}, pinned: false }],
+      projectStart: '2027-03-01', holidays: [], teamSize: 4, mode: 'rigid',
+      depSep: ', ', depStyle: 'name', dateFmt: 'iso' },
+  }));
+});
+/* Two distinct paths, and they behave differently in the browser: a cold load runs the boot
+ * handler, whereas arriving from the same page changes only the fragment - a same-document
+ * navigation that fires hashchange and never reloads. */
+await page.goto(shareUrl, { waitUntil: 'load' });
+await page.reload({ waitUntil: 'load' });          // guarantee a cold boot with the fragment
+await page.waitForSelector('#gantt .bar-wrapper');
+await page.waitForTimeout(600);
+const loaded = await page.evaluate(() => ({
+  n: window.App.doc.tasks.length,
+  names: window.App.doc.tasks.slice(0, 2).map((t) => t.name),
+  file: window.App.fileName,
+  isExample: window.App.isExample,
+}));
+check('opening a share link loads the plan it carries',
+  loaded.n === 16 && !loaded.names.includes('Unrelated task'), JSON.stringify(loaded));
+check('a shared link beats restored local edits', loaded.file === 'shared-plan.csv', loaded.file);
+check('a shared plan is not labelled as the example', loaded.isExample === false);
+check('the shared plan renders', (await page.locator('#gantt .bar-wrapper').count()) === 16);
+check('a shared plan validates identically to the plan it came from',
+  (await page.evaluate(() => JSON.stringify(window.__validate().map((f) => [f.code, f.taskId])))) === sourceFindings,
+  'shared vs source findings differ');
+
+/* And the same-document path: land on the page first, then apply the fragment. */
+await page.goto(APP.split('#')[0], { waitUntil: 'load' });
+await page.waitForSelector('#gantt .bar-wrapper');
+await page.evaluate(() => { window.__before = window.App.fileName; });
+await page.evaluate((u) => { location.hash = new URL(u).hash; }, shareUrl);
+await page.waitForTimeout(700);
+check('pasting a link while already on the page loads it too',
+  (await page.evaluate(() => window.App.fileName)) === 'shared-plan.csv',
+  await page.evaluate(() => `${window.__before} -> ${window.App.fileName}`));
+
+/* A mangled link must report itself, not wedge the app. */
+for (const [label, frag] of [
+  ['truncated payload', '#plan=eJxLyU'],
+  ['not base64 at all', '#plan=$$$$'],
+  ['valid base64, not a plan', '#plan=YWJjZGVm'],
+]) {
+  await page.goto(APP.split('#')[0], { waitUntil: 'load' });
+  await page.evaluate(() => { localStorage.clear(); localStorage.setItem('miro-timeline:seen-intro', '1'); });
+  await page.goto(APP.split('#')[0] + frag, { waitUntil: 'load' });
+  await page.reload({ waitUntil: 'load' });
+  await page.waitForTimeout(500);
+  const st = await page.evaluate(() => ({
+    tasks: window.App.doc ? window.App.doc.tasks.length : 0,
+    toast: (document.getElementById('toast') || {}).textContent || '',
+  }));
+  check(`a ${label} falls back to the example and says so`,
+    st.tasks === 16 && /could not read the shared link/i.test(st.toast),
+    JSON.stringify(st));
+}
+
+/* The button itself. */
+await boot();
+const ctxPerm = page.context();
+await ctxPerm.grantPermissions(['clipboard-read', 'clipboard-write']).catch(() => {});
+await page.click('#btn-share');
+await page.waitForTimeout(500);
+const clip = await page.evaluate(() => navigator.clipboard.readText()).catch(() => '');
+check('the Copy link button puts a share URL on the clipboard',
+  clip.includes('#plan='), clip.slice(0, 60));
+check('the toast warns that the plan is inside the link',
+  /treat it like the csv|local file/i.test(await page.locator('#toast').textContent()),
+  await page.locator('#toast').textContent());
+
 /* ---------------------------------------------------------------- onboarding */
 /* A first-time visitor used to land on a fully populated chart of invented data with
  * nothing saying so, and no hint that bars are draggable or that the axis skips weekends.

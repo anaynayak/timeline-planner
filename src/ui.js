@@ -19,6 +19,47 @@ function showTab(name) {
   ['validate', 'editor', 'load', 'columns'].forEach((n) => { document.getElementById('tab-' + n).hidden = n !== name; });
 }
 
+/* The async clipboard API needs a permission a file:// origin often does not have, so fall
+ * back to the old selection trick. Returns whether anything landed on the clipboard. */
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch (err) {
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand('copy');
+      ta.remove();
+      return ok;
+    } catch (e2) {
+      return false;
+    }
+  }
+}
+
+/** Load a plan carried in the URL fragment. Returns whether one was found. */
+async function loadFromHash() {
+  const payload = sharePayloadFromHash(location.hash);
+  if (!payload) return false;
+  try {
+    const doc = await decodeShare(payload);
+    for (const t of doc.tasks) {
+      if (!App.cal || !makeCalendar([]).inRange(t.start)) {
+        throw new Error(`"${t.name}" starts outside the supported date range.`);
+      }
+    }
+    adoptDoc(doc, 'shared-plan.csv');
+    toast(`Loaded ${doc.tasks.length} tasks from the link`);
+    return true;
+  } catch (err) {
+    toast('Could not read the shared link: ' + err.message);
+    return false;
+  }
+}
+
 function wireUI() {
   document.querySelectorAll('#side-tabs button').forEach((b) => { b.onclick = () => showTab(b.dataset.tab); });
 
@@ -122,25 +163,42 @@ function wireUI() {
   /* Tab separated, not comma: Excel and Sheets only split pasted text on tabs, so pasting
    * CSV would drop every row into a single cell. The downloaded file stays real CSV. */
   document.getElementById('btn-copy').onclick = async () => {
-    const text = docToTSV(App.doc, App.cal);
     const rows = App.doc.tasks.length;
-    const done = () => toast(`${rows} row${rows === 1 ? '' : 's'} copied - paste into Excel`);
-    try {
-      await navigator.clipboard.writeText(text);
-      done();
-    } catch (err) {
-      // clipboard API needs a permission the file:// origin may not have; fall back
-      const ta = document.createElement('textarea');
-      ta.value = text;
-      document.body.appendChild(ta);
-      ta.select();
-      document.execCommand('copy');
-      ta.remove();
-      done();
-    }
+    const ok = await copyText(docToTSV(App.doc, App.cal));
+    toast(ok ? `${rows} row${rows === 1 ? '' : 's'} copied - paste into Excel`
+      : 'Could not write to the clipboard');
   };
   // driver.js handles its own overlay, keyboard and dismissal; we only own "seen" state
   document.getElementById('btn-help').onclick = () => { startTour(); renderToolbar(); };
+
+  /* The plan travels INSIDE the link, in the fragment. That is what makes it work offline
+   * and keeps it off any server, and it is also why the toast says so plainly: a link is
+   * easier to forward carelessly than a file, and the payload is the plan itself. */
+  document.getElementById('btn-share').onclick = async () => {
+    if (!shareSupported()) {
+      toast('This browser cannot build share links (no CompressionStream)');
+      return;
+    }
+    let payload;
+    try {
+      payload = await encodeShare(App.doc);
+    } catch (err) {
+      toast('Could not build a link: ' + err.message);
+      return;
+    }
+    if (shareTooLong(payload)) {
+      toast(`Plan is too big to share as a link (${payload.length} chars) - send the CSV`);
+      return;
+    }
+    const base = location.href.split('#')[0];
+    const url = `${base}#${SHARE_KEY}=${payload}`;
+    const ok = await copyText(url);
+    const n = App.doc.tasks.length;
+    if (!ok) { toast('Could not write to the clipboard'); return; }
+    toast(location.protocol === 'file:'
+      ? `Link copied, but it points at a local file - host the page for it to be shareable`
+      : `Link copied - it carries all ${n} tasks, so treat it like the CSV`);
+  };
 
   document.getElementById('btn-reset').onclick = () => {
     localStorage.removeItem(LS_KEY);
@@ -160,6 +218,15 @@ function wireUI() {
     drop.classList.remove('on');
     const f = e.dataTransfer.files && e.dataTransfer.files[0];
     if (f) readFile(f);
+  });
+
+  /* Pasting a share link while already on the page changes only the fragment, which is a
+   * same-document navigation: the browser fires hashchange and never reloads, so the boot
+   * handler does not run again. Without this, opening a link from the page you are already
+   * on silently does nothing. */
+  window.addEventListener('hashchange', () => {
+    if (location.hash === '#selftest') { location.reload(); return; }
+    if (sharePayloadFromHash(location.hash)) loadFromHash();
   });
 
   // bubbles after frappe's own svg mouseup, so the pending values are already final
@@ -203,20 +270,32 @@ function readFile(f) {
 
 /* ============================================================ boot */
 
-window.addEventListener('DOMContentLoaded', () => {
+window.addEventListener('DOMContentLoaded', async () => {
   if (location.hash === '#selftest') { renderSelftest(); return; }
   wireUI();
   restoreTheme();   // index.html already stamped the attribute; this syncs App.theme
   restoreTour();
+
+  /* A shared link wins over restored local edits: somebody who clicks a link means to see
+   * what is in it, and being handed their own unrelated plan instead would be baffling.
+   * Their edits are not lost - adoptDoc persists the link's plan, so Reset still returns to
+   * the bundled example, but the previous session is gone. Decoding is async, so the page
+   * paints the fallback first and the link replaces it a moment later. */
   const saved = restore();
   if (saved && saved.doc && saved.doc.tasks) {
     App.doc = saved.doc;
     App.fileName = saved.fileName || 'plan.csv';
     rebuildCal();
     renderAll();
-    toast('Restored your local edits - "Reset" goes back to the file');
   } else {
     loadDoc(document.getElementById('sample-csv').textContent, EXAMPLE_NAME, true);
+  }
+  /* Only mention restored edits when no link was involved. A link that failed has already
+   * said why, and overwriting that with "Restored your local edits" hides the reason. */
+  const hadLink = !!sharePayloadFromHash(location.hash);
+  const fromLink = await loadFromHash();
+  if (!hadLink && saved && saved.doc && saved.doc.tasks) {
+    toast('Restored your local edits - "Reset" goes back to the file');
   }
   /* The tour is opt-in - nothing opens by itself. renderToolbar() has already made the
    * button say "Take the tour" and pulse if this is a first visit. */
