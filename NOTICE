@@ -23,3 +23,30 @@ the `dist` output from npm `frappe-gantt@1.2.2`.
 
 Copyright (c) 2024 Frappe Technologies Pvt. Ltd.
 Licensed under the MIT License.
+
+
+Preact and htm
+--------------
+The side panels are rendered with **Preact** (a 3kB alternative to React with the same
+modern API) and **htm** (JSX-like syntax in plain tagged template literals, so no
+transpiler is needed). Together they let this project keep its no-build-step rule while
+still getting real keyed DOM diffing: panels update in place instead of being torn down
+and rebuilt, which is what preserves input focus and scroll position. Thank you to
+Jason Miller and the Preact contributors.
+
+  Projects: https://github.com/preactjs/preact
+            https://github.com/developit/htm
+  Homepage: https://preactjs.com
+  Versions: preact 10.29.8, htm 3.1.1
+  Licence:  Preact - MIT; htm - Apache License 2.0
+  Files:    vendor/htm-preact.umd.js
+  Licence text: vendor/preact.LICENSE.txt
+                vendor/htm.LICENSE.txt
+
+`vendor/htm-preact.umd.js` is an unmodified copy of `htm/preact/standalone.umd.js` from
+npm `htm@3.1.1`, which is a prebuilt bundle of preact + preact/hooks + htm exposing the
+global `htmPreact`. It is vendored rather than loaded from a CDN for the same reason as
+Frappe Gantt: no network requests, works offline.
+
+Copyright (c) 2015-present Jason Miller (Preact), MIT License.
+Copyright (c) 2018 Jason Miller (htm), Apache License 2.0.
