@@ -1,7 +1,7 @@
 # Claude instructions for this repo
 
 A static browser Gantt planner. No build step. Read `CONTRIBUTING.md` too — it documents the
-architecture and the four hard rules.
+architecture and the hard rules.
 
 ## Hard constraints
 
@@ -13,9 +13,9 @@ Do not break these without being asked explicitly:
    which is why load order in `index.html` is load-bearing.
 2. **No runtime dependencies beyond `vendor/`, and no network requests.** Users open this
    with confidential plans in it. Third-party code is vendored with its licence. CI fails on
-   any remote `.js` / `.css` reference. There are two vendored bundles (three packages:
-   Frappe Gantt; Preact + htm). Adding another needs an explicit decision, not a drive-by
-   `npm install` — see "Dependency decisions" below.
+   any remote `.js` / `.css` reference. Adding a dependency needs an explicit decision, not
+   a drive-by `npm install` — every one that was adopted or refused, and why, is under
+   "Dependency decisions" below.
 3. **Examples stay synthetic.** `examples/*.csv` is invented data. Never commit real client
    plans. CI fails if any `.csv`/`.tsv` is tracked outside `examples/`. `.gitignore` excludes `timeline.csv`
    and `plan.csv` at the repo root plus `*.local.csv` — if the user drops a real plan in the
@@ -58,7 +58,7 @@ no DOM shim — do not trade it away for convenience.
 Adding a file to `src/` means adding a `<script>` tag in `index.html`; CI fails if a module
 has no tag or a tag points at a missing file.
 
-## Three invariants
+## Invariants
 
 - **All scheduling is integer working-day arithmetic**, never date maths. `cal.nextIdx(ymd)`
   gives a working-day index, `cal.at(i)` goes back. Weekends and holidays don't exist in
@@ -178,7 +178,7 @@ tab's nudge buttons say `-1w` / `+1w`, which is plain ASCII and clearer than che
 
 ## Frappe Gantt gotchas
 
-These are load-bearing. All five were found the hard way:
+These are load-bearing, and every one was found the hard way:
 
 1. **`ignore: ['weekend']` does not compress the axis.** It hatches non-working columns and
    keeps a calendar axis, so a 10-working-day bar would be 12 columns wide. Hence workday

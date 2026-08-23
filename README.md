@@ -1,5 +1,8 @@
 # Timeline Planner
 
+**[Try it → anaynayak.github.io/timeline-planner](https://anaynayak.github.io/timeline-planner/)**
+— it loads with a synthetic example, so there is nothing to set up.
+
 A static, offline browser tool that turns a CSV project plan into a Gantt chart on a
 **working-day axis**, validates it against the estimate column, and reschedules downstream
 tasks when you move or resize one.
@@ -17,14 +20,21 @@ All are vendored, not fetched.
 
 ## Running it
 
+Either open the [hosted copy](https://anaynayak.github.io/timeline-planner/), or clone and
+open the file:
+
 ```
 open index.html
 ```
 
 No build step, no server, no install. It is plain HTML plus ordinary classic scripts — no
-modules, no bundler — so it works straight from `file://`. Everything happens in the browser
-and **nothing is sent over the network**: both libraries are vendored locally rather than
-pulled from a CDN.
+modules, no bundler — so it works straight from `file://`.
+
+**Your plan never leaves the browser.** Every library is vendored rather than pulled from a
+CDN, and the app makes no network request of any kind — CI fails the build if one
+appears. Opening the hosted copy fetches the page itself from GitHub Pages, and that is the
+only request involved; nothing about a plan you load is ever sent anywhere. Even a
+[share link](#output) keeps the plan in the URL *fragment*, which browsers do not transmit.
 
 A short guided tour points at the parts that are not guessable — the working-day axis,
 dragging a bar, and the duration-versus-estimate column. It is **opt-in**: nothing
@@ -182,17 +192,18 @@ You can also open `index.html#selftest` to run the logic assertions in the brows
 
 ## Deploying
 
-The app is a static site, so GitHub Pages works out of the box. The included
-`Deploy to GitHub Pages` workflow is **manual-only** to begin with, so it does not fail CI
-before Pages has been turned on:
+Live at **[anaynayak.github.io/timeline-planner](https://anaynayak.github.io/timeline-planner/)**,
+published by the `Deploy to GitHub Pages` workflow on every push to `main`.
 
-1. **Settings → Pages → Source: GitHub Actions**
-2. **Actions → Deploy to GitHub Pages → Run workflow**
-3. once that succeeds, add the `push` trigger noted in the workflow to publish on every
-   merge to `main`
+The Pages source must stay on **GitHub Actions** (Settings → Pages → Source). The other
+option, *Deploy from a branch*, serves the repository root verbatim — which renders fine but
+skips the assembly step, so it publishes `src/testhooks.js` and puts `window.App` and the
+`__*` helpers on the public page. Those exist only so the browser suite can drive the app.
+The workflow strips that file and its `<script>` tag, adds `.nojekyll`, and fails loudly if
+any script target is missing rather than publishing a broken page.
 
-Note that Pages for a *private* repository requires a paid GitHub plan; on the free plan
-either make the repo public or just run it locally.
+Pages on a *private* repository needs a paid GitHub plan; on the free plan either make the
+repo public or just run it locally.
 
 ## Contributing
 
@@ -226,7 +237,7 @@ examples/           synthetic example plans
 test/               headless test runners
 ```
 
-The first eight files in `src/` are pure - no DOM access at all - which is what lets the
+Every file above `store.js` is pure - no DOM access at all - which is what lets the
 logic suite run under Node with no browser and no DOM shim.
 
 ## Implementation notes

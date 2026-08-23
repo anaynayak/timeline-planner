@@ -33,7 +33,7 @@ Or open `index.html#selftest` to run the logic assertions in the browser.
 
 CI runs both suites plus a hygiene job on every push and pull request.
 
-## The four rules
+## The rules
 
 1. **No build step.** `index.html` must keep working when opened directly from `file://`.
    That means classic `<script src>`, no ES module imports between project files, no
@@ -42,10 +42,9 @@ CI runs both suites plus a hygiene job on every push and pull request.
 2. **No runtime dependencies beyond `vendor/`, and no network requests.** The tool has to
    work offline with confidential plans in it. Third-party code is vendored into `vendor/`
    with its licence, and CI fails if a remote `.js` or `.css` is referenced. There are
-   exactly two vendored bundles (three packages: Frappe Gantt; Preact + htm), and the
-   reasoning for each - plus for the ones that were turned down - is recorded under
-   "Dependency decisions" in `CLAUDE.md`. Adding another is a decision to discuss, not a
-   drive-by.
+   what is vendored, and why - along with the libraries that were considered and turned
+   down - is recorded under "Dependency decisions" in `CLAUDE.md`. Adding another is a
+   decision to discuss, not a drive-by.
 3. **Examples stay synthetic.** `examples/*.csv` must be invented data, and CI fails if a
    `.csv` or `.tsv` is tracked anywhere outside `examples/`. Never commit a client plan;
    `.gitignore` already excludes `timeline.csv` and `plan.csv` at the repo root and
@@ -92,7 +91,8 @@ broke once; the comment at the top of the file lists them.
 
 ## Architecture in one screen
 
-`src/` is loaded as ordered classic scripts. The first eight are pure - no DOM at all:
+`src/` is loaded as ordered classic scripts. Everything above `store.js` is pure - no DOM
+at all:
 
 | File | What it owns | Pure? |
 |---|---|---|
@@ -115,7 +115,7 @@ broke once; the comment at the top of the file lists them.
 Adding a file means adding a `<script>` tag to `index.html`. CI fails if a module has no
 tag, or a tag points at a file that does not exist.
 
-Three invariants hold the design together:
+Three things hold the design together:
 
 - **All scheduling arithmetic is integer working-day indices**, never date maths. Weekends and
   holidays simply do not exist in that number line, which is why a task can never land on a
