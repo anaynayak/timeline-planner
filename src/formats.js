@@ -139,20 +139,22 @@ function parseDateCell(v) {
   const d = new Date(s);
   return isNaN(d) ? null : ymd(d);
 }
-/** How the source wrote its dates, so the export matches. */
+/* How the source wrote its dates, so day-first files are written back day-first.
+ *
+ * A timestamped source (2027-03-01T00:00:00.000Z) is reported as plain 'iso', NOT echoed
+ * back with its time component. That echo only ever existed to make the Miro markdown
+ * round trip byte-identical; these are whole-day fields, and a timestamp in a CSV or on
+ * the clipboard is worse than useless to a spreadsheet, which will not read it as a date. */
 function detectDateFormat(samples) {
   for (const s of samples) {
     const v = String(s || '').trim();
     if (!v) continue;
-    if (/T\d{2}:\d{2}/.test(v)) return 'isoz';
     if (/^\d{1,2}[-/]\d{1,2}[-/]\d{4}$/.test(v)) return 'dmy';
-    if (/^\d{4}[-/]\d{1,2}[-/]\d{1,2}$/.test(v)) return 'iso';
   }
   return 'iso';
 }
 function formatDateCell(s, fmt) {
   if (!s) return '';
-  if (fmt === 'isoz') return s + 'T00:00:00.000Z';
   if (fmt === 'dmy') { const d = parseYMD(s); return `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}/${d.getFullYear()}`; }
   return s;
 }

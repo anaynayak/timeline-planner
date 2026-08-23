@@ -123,11 +123,29 @@ function selftest(fixtures) {
   eq('day first', parseDateCell('01/03/2027'), '2027-03-01');
   eq('single digits', parseDateCell('1/3/2027'), '2027-03-01');
   eq('empty', parseDateCell(''), null);
-  eq('format detection: isoz', detectDateFormat(['2027-03-01T00:00:00.000Z']), 'isoz');
   eq('format detection: dmy', detectDateFormat(['01/03/2027']), 'dmy');
   eq('format detection: iso', detectDateFormat(['2027-03-01']), 'iso');
   eq('dmy is written back as dmy', formatDateCell('2027-03-01', 'dmy'), '01/03/2027');
-  eq('isoz is written back as isoz', formatDateCell('2027-03-01', 'isoz'), '2027-03-01T00:00:00.000Z');
+  // these are whole-day fields; a timestamped source is read, then written back as a date.
+  // The old behaviour echoed the time component to keep the Miro round trip byte-identical,
+  // which put "2027-03-01T00:00:00.000Z" in a cell a spreadsheet cannot read as a date.
+  eq('a timestamped source is not treated as its own format',
+    detectDateFormat(['2027-03-01T00:00:00.000Z']), 'iso');
+  eq('no format writes a time component',
+    ['iso', 'dmy'].map((f) => /T\d{2}:/.test(formatDateCell('2027-03-01', f))), [false, false]);
+  eq('a timestamped CSV exports plain dates', (() => {
+    const p = load('name,estimate,start_date,end_date\n' +
+      'A,5,2027-03-01T00:00:00.000Z,2027-03-05T00:00:00.000Z\n', 'x.csv');
+    const row = parseCSV(docToCSV(p, cal0))[1];
+    return { start: row[2], end: row[3] };
+  })(), { start: '2027-03-01', end: '2027-03-05' });
+  eq('a timestamped CSV copies to the clipboard as plain dates', (() => {
+    const p = load('name,estimate,start_date,end_date\n' +
+      'A,5,2027-03-01T00:00:00.000Z,2027-03-05T00:00:00.000Z\n', 'x.csv');
+    return /T\d{2}:/.test(docToTSV(p, cal0));
+  })(), false);
+  eq('the timestamp is still accepted on the way in',
+    parseDateCell('2027-03-01T00:00:00.000Z'), '2027-03-01');
 
   section('calendar');
   eq('2027-03-06 is a Saturday, not working', cal0.isWorking('2027-03-06'), false);
