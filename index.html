@@ -230,7 +230,9 @@
     <input type="file" id="file-input" accept=".csv,.md,.markdown,.txt,.tsv" hidden>
   </div>
   <div class="grp credit">
-    Gantt by <a href="https://github.com/frappe/gantt" target="_blank" rel="noopener noreferrer">Frappe Gantt</a> (MIT)
+    Gantt by <a href="https://github.com/frappe/gantt" target="_blank" rel="noopener noreferrer">Frappe Gantt</a> (MIT),
+    panels by <a href="https://preactjs.com" target="_blank" rel="noopener noreferrer">Preact</a> (MIT)
+    + <a href="https://github.com/developit/htm" target="_blank" rel="noopener noreferrer">htm</a> (Apache-2.0)
   </div>
 </div>
 
@@ -288,6 +290,26 @@ open,Public opening,,Launch,2027-05-17,2027-05-21,5,Ada,high,Soft launch week
 </script>
 
 <script src="vendor/frappe-gantt.umd.js"></script>
-<script src="app.js"></script>
+<!-- preact + hooks + htm in one prebuilt UMD bundle, global `htmPreact`. Classic script,
+     so it works from file:// with no import map and no bundler. -->
+<script src="vendor/htm-preact.umd.js"></script>
+
+<!-- Ordered classic scripts sharing one global scope: no build step, no ES modules, so
+     this page still works opened straight from file://. Load order is load-bearing.
+     The first six files are pure (no DOM) - that is what lets `npm test` run headless,
+     and test/logic.test.mjs fails if DOM access leaks into one of them. -->
+<script src="src/dates.js"></script>
+<script src="src/calendar.js"></script>
+<script src="src/workday-space.js"></script>
+<script src="src/formats.js"></script>
+<script src="src/scheduler.js"></script>
+<script src="src/validate.js"></script>
+<script src="src/fixes.js"></script>
+<script src="src/selftest.js"></script>
+<script src="src/store.js"></script>
+<script src="src/panels.js"></script>
+<script src="src/render.js"></script>
+<script src="src/ui.js"></script>
+<script src="src/testhooks.js"></script>
 </body>
 </html>

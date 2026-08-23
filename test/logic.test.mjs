@@ -1,8 +1,11 @@
-/* Runs the assertions in app.js's selftest() under Node, with no browser and no
- * dependencies, by shimming the handful of DOM calls it makes.
+/* Runs the assertions in src/selftest.js under Node: no browser, no dependencies, and
+ * no DOM shim.
  *
- * The assertions themselves live in selftest() inside app.js rather than here, so that
+ * The assertions themselves live in selftest() rather than here, so that
  * `index.html#selftest` and `npm test` can never drift apart. Add new assertions there.
+ *
+ * Only the PURE sources are loaded. If this file ever needs a `document` stub again, that
+ * is the signal that DOM access has leaked below the store - fix the source, not this.
  */
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -10,72 +13,61 @@ import { dirname, join } from 'node:path';
 import vm from 'node:vm';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const html = readFileSync(join(ROOT, 'index.html'), 'utf8');
-const app = readFileSync(join(ROOT, 'app.js'), 'utf8');
 
-const grab = (id) => {
+/* Load order matters: these are classic scripts sharing one global scope, exactly as
+ * index.html loads them. Keep this list in step with the <script> tags there. */
+const PURE = [
+  'dates.js', 'calendar.js', 'workday-space.js', 'formats.js',
+  'scheduler.js', 'validate.js', 'fixes.js', 'selftest.js',
+];
+
+const html = readFileSync(join(ROOT, 'index.html'), 'utf8');
+const fixture = (id) => {
   const m = html.match(new RegExp(`<script type="text/plain" id="${id}">([\\s\\S]*?)</script>`));
   if (!m) throw new Error(`${id} block not found in index.html`);
   return m[1].replace(/^\n/, '');
 };
 
-let captured = '';
-const noop = () => {};
-const stubEl = () => ({
-  style: {},
-  classList: { add: noop, remove: noop, toggle: noop, contains: () => false },
-  appendChild: noop, append: noop, remove: noop,
-  querySelector: () => null, querySelectorAll: () => [],
-  setAttribute: noop, set innerHTML(v) {}, set textContent(v) {},
-});
-const els = {
-  'sample-csv': { textContent: grab('sample-csv') },
-  'sample-md': { textContent: grab('sample-md') },
-  selftest: { set innerHTML(v) { captured = v; }, get innerHTML() { return captured; } },
-};
+/* Guard the purity invariant that lets this harness stay this small. Comments and string
+ * literals are stripped first, or prose like "the calendar window" trips it. */
+const codeOnly = (src) => src
+  .replace(/\/\*[\s\S]*?\*\//g, ' ')
+  .replace(/\/\/[^\n]*/g, ' ')
+  .replace(/'(?:[^'\\\n]|\\.)*'|"(?:[^"\\\n]|\\.)*"|`(?:[^`\\]|\\.)*`/g, ' ');
 
-const sandbox = {
-  console, JSON, Math, Date, Number, String, Boolean, Array, Object, Map, Set, RegExp, Error,
-  isNaN, parseInt, parseFloat, setTimeout, clearTimeout, URL,
-  Gantt: function () {},
-  location: { hash: '' },
-  localStorage: { getItem: () => null, setItem: noop, removeItem: noop },
-  navigator: { clipboard: { writeText: async () => {} } },
-  document: {
-    getElementById: (id) => els[id] || stubEl(),
-    querySelector: () => null,
-    querySelectorAll: () => [],
-    createElement: stubEl,
-    body: { classList: { add: noop }, appendChild: noop },
-    addEventListener: noop,
-  },
-  window: { addEventListener: noop },
-};
-sandbox.globalThis = sandbox;
-
-vm.createContext(sandbox);
-vm.runInContext(app + '\n;selftest();', sandbox, { filename: 'app.js' });
-
-const text = captured
-  .replace(/<h2>/g, '\n\x1b[1m')
-  .replace(/<\/h2>/g, '\x1b[0m')
-  .replace(/<br\s*\/?>/g, '\n')
-  .replace(/<\/div>/g, '\n')
-  .replace(/<[^>]+>/g, '')
-  .replace(/&nbsp;/g, ' ')
-  .replace(/&rarr;/g, '->')
-  .replace(/&middot;/g, '-')
-  .replace(/\n{3,}/g, '\n\n')
-  .replace(/^(PASS.*)$/gm, '\x1b[32m$1\x1b[0m')
-  .replace(/^(FAIL.*)$/gm, '\x1b[31m$1\x1b[0m');
-
-console.log(text.trim());
-
-const m = captured.match(/(\d+) passed, (\d+) failed/);
-if (!m) {
-  console.error('\nCould not read a result summary from selftest()');
+const impure = [];
+for (const f of PURE) {
+  const code = codeOnly(readFileSync(join(ROOT, 'src', f), 'utf8'));
+  for (const bad of ['document', 'localStorage', 'navigator', 'window', 'Gantt']) {
+    if (new RegExp(`\\b${bad}\\b`).test(code)) impure.push(`${f} references ${bad}`);
+  }
+}
+if (impure.length) {
+  console.error('\x1b[31mDOM access has leaked into a pure source file:\x1b[0m');
+  for (const m of impure) console.error('  ' + m);
+  console.error('\nSections 1-5 must stay DOM-free - that is what lets this suite run headless.');
   process.exit(1);
 }
-const failed = Number(m[2]);
-console.log(`\n${failed ? '\x1b[31mFAILED\x1b[0m' : '\x1b[32mALL PASS\x1b[0m'}  ${m[1]} passed, ${failed} failed`);
-process.exit(failed ? 1 : 0);
+
+const sandbox = { console };
+sandbox.globalThis = sandbox;
+vm.createContext(sandbox);
+for (const f of PURE) {
+  vm.runInContext(readFileSync(join(ROOT, 'src', f), 'utf8'), sandbox, { filename: 'src/' + f });
+}
+
+const { pass, fail, results } = vm.runInContext('selftest', sandbox)({
+  csv: fixture('sample-csv'),
+  md: fixture('sample-md'),
+});
+
+for (const r of results) {
+  if (r.kind === 'section') { console.log(`\n\x1b[1m${r.name}\x1b[0m`); continue; }
+  if (r.ok) { console.log(`\x1b[32mPASS\x1b[0m ${r.name}`); continue; }
+  console.log(`\x1b[31mFAIL\x1b[0m ${r.name}`);
+  console.log(`       got  ${JSON.stringify(r.got)}`);
+  console.log(`       want ${JSON.stringify(r.want)}`);
+}
+
+console.log(`\n${fail ? '\x1b[31mFAILED\x1b[0m' : '\x1b[32mALL PASS\x1b[0m'}  ${pass} passed, ${fail} failed`);
+process.exit(fail ? 1 : 0);
