@@ -9,8 +9,10 @@ working day, bars snap to whole calendar weeks regardless of the estimate, and t
 "blocked by" column is decorative text that nothing enforces. This fixes that, without
 becoming a project-management server.
 
-Gantt rendering is provided by **[Frappe Gantt](https://github.com/frappe/gantt)** (MIT) —
-see [NOTICE](NOTICE).
+Gantt rendering is provided by **[Frappe Gantt](https://github.com/frappe/gantt)** (MIT) and
+the side panels by **[Preact](https://preactjs.com)** (MIT) +
+**[htm](https://github.com/developit/htm)** (Apache-2.0) — see [NOTICE](NOTICE). Both are
+vendored, not fetched.
 
 ## Running it
 
@@ -18,9 +20,10 @@ see [NOTICE](NOTICE).
 open index.html
 ```
 
-No build step, no server, no install. It is plain HTML plus one classic script, so it works
-straight from `file://`. Everything happens in the browser and **nothing is sent over the
-network** — the Gantt library is vendored locally rather than pulled from a CDN.
+No build step, no server, no install. It is plain HTML plus ordinary classic scripts — no
+modules, no bundler — so it works straight from `file://`. Everything happens in the browser
+and **nothing is sent over the network**: both libraries are vendored locally rather than
+pulled from a CDN.
 
 Drop a `.csv` on the window to load it, or use **Open file**. Two synthetic examples are in
 [`examples/`](examples):
@@ -151,19 +154,36 @@ either make the repo public or just run it locally.
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). Short version: no build step, no runtime
-dependencies, add assertions in `selftest()` alongside the change, and keep the examples
+See [CONTRIBUTING.md](CONTRIBUTING.md). Short version: no build step, nothing fetched at
+runtime, add assertions in `selftest()` alongside the change, and keep the examples
 synthetic.
 
 ## Files
 
 ```
 index.html          markup, styles, and the bundled example
-app.js              parser, calendar, scheduler, validators, UI, selftest
-vendor/             Frappe Gantt 1.2.2 (MIT), vendored so there are no network calls
+src/                the app, as ordered classic <script> files - no bundler
+  dates.js            date helpers
+  calendar.js         the working-day index
+  workday-space.js    the synthetic-date transform the chart is drawn in
+  formats.js          CSV / TSV / Miro-markdown read and write, column aliases
+  scheduler.js        topological sort, ASAP, rigid propagation, float, load
+  validate.js         findings, and the fix each one offers
+  fixes.js            what each fix does
+  selftest.js         the logic assertions
+  store.js            app state, commit(), undo/redo, localStorage
+  panels.js           the gutter and side panels, as Preact components
+  render.js           Frappe Gantt wiring
+  ui.js               toolbar, tabs, drag-and-drop, keyboard, boot
+  testhooks.js        hooks for the browser suite; dropped from a deploy
+vendor/             Frappe Gantt 1.2.2 (MIT), htm + Preact (Apache-2.0 / MIT),
+                    vendored so there are no network calls
 examples/           synthetic example plans
 test/               headless test runners
 ```
+
+The first eight files in `src/` are pure - no DOM access at all - which is what lets the
+logic suite run under Node with no browser and no DOM shim.
 
 ## Implementation notes
 
@@ -182,6 +202,19 @@ Also: `custom_class` is passed straight to `classList.add`, so it must be a sing
 state classes and tag colours are applied after render instead. Its built-in
 `move_dependencies` is a rigid visual drag that ignores working days, so it is switched off
 and all propagation is handled here.
+
+Two more things worth knowing:
+
+3. **Scheduling never does date arithmetic.** Positions are integer working-day indices from
+   `src/calendar.js`, so weekends and holidays do not exist in the number line and a task
+   cannot land on a Saturday. Anything that loops over tasks builds the dependency graph
+   once and passes it down; re-deriving it per task is what previously made an edit on a
+   300-task plan take over 100 ms.
+4. **The panels diff rather than rebuild.** They are Preact components, so editing a field
+   updates the DOM in place instead of tearing the subtree down — which is what preserves
+   input focus, caret position and scroll offset, and escapes column names from the loaded
+   file by construction. htm ships a prebuilt UMD bundle of preact + hooks + htm, so this
+   costs one 13 kB vendored file and no build step.
 
 Dependency-aware rescheduling is a paid feature in the obvious alternatives:
 [DHTMLX Gantt](https://docs.dhtmlx.com/gantt/guides/auto-scheduling)'s `auto_scheduling` is

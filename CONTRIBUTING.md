@@ -1,7 +1,7 @@
 # Contributing
 
-Thanks for taking a look. This is a small, deliberately boring codebase: two source files, no
-build step, no runtime dependencies. Please keep it that way.
+Thanks for taking a look. This is a small, deliberately boring codebase: a dozen plain
+`.js` files, no build step, nothing to install in order to run it. Please keep it that way.
 
 ## Getting set up
 
@@ -11,8 +11,8 @@ cd miro-timeline
 open index.html          # that's the whole dev loop
 ```
 
-Editing `app.js` or `index.html` and reloading the page is the entire workflow. There is
-nothing to compile and nothing to watch.
+Editing a file in `src/` or `index.html` and reloading the page is the entire workflow.
+There is nothing to compile and nothing to watch.
 
 For the browser test suite only:
 
@@ -37,10 +37,14 @@ CI runs both suites plus a hygiene job on every push and pull request.
 
 1. **No build step.** `index.html` must keep working when opened directly from `file://`.
    That means classic `<script src>`, no ES module imports between project files, no
-   bundler, no transpiler, no TypeScript.
-2. **No runtime dependencies and no network requests.** The tool has to work offline with
-   confidential plans in it. Third-party code is vendored into `vendor/` with its licence,
-   and CI fails if a remote `.js` or `.css` is referenced.
+   bundler, no transpiler, no TypeScript. The files in `src/` are ordered classic scripts
+   sharing one global scope, so the order of the `<script>` tags is load-bearing.
+2. **No runtime dependencies beyond `vendor/`, and no network requests.** The tool has to
+   work offline with confidential plans in it. Third-party code is vendored into `vendor/`
+   with its licence, and CI fails if a remote `.js` or `.css` is referenced. There are
+   exactly two vendored dependencies, and the reasoning for each - plus for the ones that
+   were turned down - is recorded under "Dependency decisions" in `CLAUDE.md`. Adding a
+   third is a decision to discuss, not a drive-by.
 3. **Examples stay synthetic.** `examples/*.csv` must be invented data. CI greps for names
    from the real board this was written against. Never commit a client plan; `.gitignore`
    already excludes `timeline.csv` and `plan.csv` at the repo root and `*.local.csv`.
@@ -48,15 +52,21 @@ CI runs both suites plus a hygiene job on every push and pull request.
 
 ## Where tests live
 
-The logic assertions live in `selftest()` at the bottom of `app.js`, not in `test/`. That is
+The logic assertions live in `selftest()` in `src/selftest.js`, not in `test/`. That is
 deliberate: it keeps `index.html#selftest` and `npm test` running the *same* assertions, so
-they cannot drift, and it means the tests work with no tooling at all. `test/logic.test.mjs`
-just drives `selftest()` under Node with a small DOM shim.
+they cannot drift, and it means the tests work with no tooling at all.
 
-- **Parsing, calendar, scheduling, validation** → add an `eq(...)` to the right `section()`
-  in `selftest()`.
-- **Rendering, geometry, mouse gestures, DOM wiring** → add a `check(...)` to
-  `test/browser.test.mjs`.
+`selftest(fixtures)` is a pure function - it takes the two fixture texts and returns
+structured results. `test/logic.test.mjs` loads only the pure sources and formats those
+results, so there is no DOM shim to keep in step. The browser renders the same results
+through `renderSelftest()`. If you ever want to add a `document` stub to the Node harness,
+that is the signal that DOM access has leaked into a pure file - fix the source, not the
+harness.
+
+- **Parsing, calendar, scheduling, validation, fixes** -> add an `eq(...)` to the right
+  `section()` in `selftest()`.
+- **Rendering, geometry, mouse gestures, DOM wiring, Preact diffing** -> add a `check(...)`
+  to `test/browser.test.mjs`.
 
 Prefer an assertion that would have caught the bug over one that restates the
 implementation. Several checks in `test/browser.test.mjs` exist because that exact thing
@@ -64,28 +74,39 @@ broke once; the comment at the top of the file lists them.
 
 ## Architecture in one screen
 
-`app.js` is ordered in numbered sections, top to bottom:
+`src/` is loaded as ordered classic scripts. The first eight are pure - no DOM at all:
 
-| Section | What it owns |
-|---|---|
-| 1. date utils | local-midnight `Date` helpers, `YYYY-MM-DD` strings |
-| 2. calendar | the working-day index: real date ↔ integer working-day number |
-| 3. tabular formats | CSV and Miro-markdown read/write, column alias mapping, dependency resolution |
-| 4. scheduler | topological sort, ASAP forward pass, rigid shift, float/critical path, weekly load |
-| 5. validation | findings and their one-click fixes |
-| 6. store | app state, undo/redo, `localStorage` |
-| 7. rendering | workday-space transform, Frappe Gantt wiring, gutter, side panels |
-| 8. UI wiring | toolbar, tabs, drag-and-drop, keyboard |
-| 9. selftest | the logic assertions |
+| File | What it owns | Pure? |
+|---|---|---|
+| `dates.js` | local-midnight `Date` helpers, `YYYY-MM-DD` strings | yes |
+| `calendar.js` | the working-day index: real date <-> integer working-day number | yes |
+| `workday-space.js` | the synthetic-date transform the chart is drawn in | yes |
+| `formats.js` | CSV / TSV / Miro-markdown read+write, column aliases, dependency resolution | yes |
+| `scheduler.js` | topological sort, ASAP pass, rigid shift, float/critical path, weekly load | yes |
+| `validate.js` | findings, and the fix `kind` each one offers | yes |
+| `fixes.js` | what each fix `kind` actually does | yes |
+| `selftest.js` | the logic assertions | yes |
+| `store.js` | `App` state, `commit()`, undo/redo, `localStorage` | no |
+| `panels.js` | the gutter and four side panels, as Preact components | no |
+| `render.js` | Frappe Gantt wiring, `renderAll`, `viewOf` | no |
+| `ui.js` | toolbar, tabs, drag-and-drop, keyboard, boot | no |
+| `testhooks.js` | `window.App` and `__*` helpers for the browser suite only | no |
 
-Two invariants hold the design together:
+Adding a file means adding a `<script>` tag to `index.html`. CI fails if a module has no
+tag, or a tag points at a file that does not exist.
+
+Three invariants hold the design together:
 
 - **All scheduling arithmetic is integer working-day indices**, never date maths. Weekends and
   holidays simply do not exist in that number line, which is why a task can never land on a
   Saturday. If you find yourself adding days to a `Date` in the scheduler, reach for
   `cal.nextIdx` / `cal.at` instead.
-- **Sections 1–5 are pure functions** with no DOM access. That is what lets `npm test` run
-  without a browser. Please don't reach for `document` above section 6.
+- **The pure files never touch `document`, `window`, `localStorage` or `Gantt`.** That is
+  what lets `npm test` run with no browser and no shim, and the harness fails with an
+  explicit message if one of them does.
+- **Every plan change goes through `commit()`** in `store.js`, which snapshots for undo,
+  mutates, then re-renders. Hand-rolling `snapshot()` is how two edits ended up silently
+  not undoable.
 
 ## Style
 
@@ -105,9 +126,9 @@ Two invariants hold the design together:
 - Say what changed and why in the PR, and mention which assertion covers it.
 - Green CI before review.
 
-## Upgrading Frappe Gantt
+## Upgrading a vendored dependency
 
-`vendor/` holds an unmodified copy of the npm `dist` output. To bump it:
+`vendor/` holds unmodified copies of npm `dist` output. To bump Frappe Gantt:
 
 ```
 npm pack frappe-gantt@<version>
@@ -116,6 +137,19 @@ cp package/dist/frappe-gantt.umd.js package/dist/frappe-gantt.css vendor/
 cp package/license.txt vendor/frappe-gantt.LICENSE.txt
 ```
 
-Then update the version in `NOTICE` and run `npm run test:all`. The browser suite is the
-thing that will catch a behaviour change — it asserts bar geometry and drag semantics, which
-is exactly where this library has surprised us before.
+To bump Preact or htm - note the app uses the single prebuilt bundle that htm ships, which
+already contains preact, preact/hooks and htm, so there is only one file to copy:
+
+```
+npm pack htm@<version> preact@<version>
+tar xzf htm-<version>.tgz && mv package htm
+tar xzf preact-<version>.tgz && mv package preact
+cp htm/preact/standalone.umd.js vendor/htm-preact.umd.js
+cp preact/LICENSE vendor/preact.LICENSE.txt
+cp htm/LICENSE vendor/htm.LICENSE.txt
+```
+
+In both cases update the versions in `NOTICE` and run `npm run test:all`. The browser suite
+is the thing that will catch a behaviour change - it asserts bar geometry and drag semantics
+for Frappe, and node reuse, focus retention and escaping for Preact. Those are exactly the
+places these libraries have surprised us before.
