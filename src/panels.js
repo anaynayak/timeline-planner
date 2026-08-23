@@ -169,6 +169,63 @@ const LoadPanel = ({ doc, cal, rows }) => html`
   </div>
 `;
 
+/* ---------- plan properties ---------- */
+
+/* Project start and team size are properties of the plan, not toolbar verbs, and they were
+ * crowding a toolbar of actions. Team size in particular belongs here: the capacity table it
+ * drives is one tab over, and the Load tab already narrates its value in prose. */
+const PlanPanel = ({ doc, cal }) => {
+  const startI = cal.nextIdx(doc.projectStart);
+  const nudge = (wd) => commit(() => {
+    App.doc.projectStart = App.cal.at(Math.max(0, App.cal.nextIdx(App.doc.projectStart) + wd));
+    shiftAll(App.doc, App.cal, wd);
+  });
+  const onStart = (e) => {
+    const v = e.target.value;
+    if (!v) return;
+    if (!App.cal.inRange(v)) {
+      toast(`Project start must be between ${App.cal.first} and ${App.cal.last}`);
+      renderAll();
+      return;
+    }
+    const oldIdx = App.cal.nextIdx(App.doc.projectStart);
+    const newIdx = App.cal.nextIdx(v);
+    if (newIdx === oldIdx) return;   // don't spend an undo entry on a no-op
+    commit(() => {
+      App.doc.projectStart = App.cal.at(newIdx);
+      shiftAll(App.doc, App.cal, newIdx - oldIdx);
+    });
+    toast(`Whole plan shifted ${newIdx - oldIdx > 0 ? '+' : ''}${newIdx - oldIdx} working days`);
+  };
+  /* htm does not decode HTML entities, so &laquo; would render literally. "-1w" / "+1w"
+   * is plain ASCII and says what the button does, which the chevrons never did. */
+  return html`
+    <div class="plan-row">
+      <label for="proj-start">Project start</label>
+      <div class="ctl">
+        <input type="date" id="proj-start" value=${cal.at(startI)} onChange=${onStart} />
+        <button id="btn-shift-back" title="Shift the whole plan 1 week earlier"
+                onClick=${() => nudge(-5)}>-1w</button>
+        <button id="btn-shift-fwd" title="Shift the whole plan 1 week later"
+                onClick=${() => nudge(5)}>+1w</button>
+      </div>
+    </div>
+    <${Hint}>Moving this shifts every task by the same number of working days, keeping the shape of the plan.<//>
+    <div class="plan-row">
+      <label for="team-size">Team size</label>
+      <div class="ctl">
+        <input type="number" id="team-size" min="1" max="99" value=${doc.teamSize}
+               onChange=${(e) => {
+                 const n = Math.max(1, Number(e.target.value) || 1);
+                 if (n === App.doc.teamSize) return;
+                 commit(() => { App.doc.teamSize = n; });
+               }} />
+      </div>
+    </div>
+    <${Hint}>Used to flag weeks over capacity in the Load tab. Nothing is ever rescheduled to fit it.<//>
+  `;
+};
+
 /* ---------- column mapping ---------- */
 
 const ColumnsPanel = ({ doc, numCols, colors, overflow }) => {
@@ -338,4 +395,5 @@ const paintGutter = mount('gutter');
 const paintValidation = mount('tab-validate');
 const paintLoad = mount('tab-load');
 const paintColumns = mount('tab-columns');
+const paintPlan = mount('tab-plan');
 const paintEditor = mount('tab-editor');

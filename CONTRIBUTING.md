@@ -128,6 +128,22 @@ Three invariants hold the design together:
   mutates, then re-renders. Hand-rolling `snapshot()` is how two edits ended up silently
   not undoable.
 
+## Where a control belongs
+
+The toolbar is for **actions and live modes**, and should stay one row. Before adding
+something to it, check which of these it is:
+
+| It is | Put it |
+|---|---|
+| Used every few seconds, or shows state you need mid-gesture | in the toolbar |
+| Data in or out | in the `File` menu |
+| Set once, and you can see its effect anyway | behind the gear |
+| A property of the plan rather than a verb | on the `Plan` side-panel tab |
+
+Project start and team size are the worked example: they read like toolbar controls and are
+not. Team size in particular belongs next to the capacity table in the Load tab that it
+drives.
+
 ## Colours
 
 Light and dark are supported, and **every colour is a token** declared in the three blocks

@@ -163,13 +163,54 @@
   .brand small.example::after { content: 'example'; margin-left: 6px; padding: 1px 6px;
     border-radius: 999px; background: var(--warn-bg); color: var(--warn-fg);
     font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .4px; }
-  .credit { margin-left: auto; color: var(--fg-dim); font-size: 11px; }
-  .credit a { color: var(--fg-dim); }
-  .credit a:hover { color: var(--accent); }
   .badge { border-radius: 999px; padding: 1px 7px; font-size: 11px; font-weight: 600; }
   .badge.err { background: var(--err-bg); color: var(--err-fg); }
   .badge.warn { background: var(--warn-bg); color: var(--warn-fg); }
   .badge.ok { background: var(--ok-bg); color: var(--ok-fg); }
+
+  /* the tier-2/3 cluster sits hard right so the visible controls read left-to-right as
+     "what I did / how dragging behaves / how close I am looking" */
+  #toolbar .trailing { margin-left: auto; }
+
+  /* Below this width the trailing group gets pushed onto a second row by its own
+     margin-left:auto. The group labels are the cheapest thing to give up: "Rigid | ASAP"
+     and "Day | Compact | Tiny" already say what they are, and the title attributes stay. */
+  @media (max-width: 1280px) {
+    #toolbar { gap: 10px; }
+    #toolbar .grp > label { display: none; }
+  }
+
+  /* ---------- menus ---------- */
+  .menu { position: relative; display: inline-flex; }
+  .menu > button[aria-expanded="true"] { border-color: var(--accent); color: var(--accent); }
+  .menu-pop {
+    position: absolute; top: calc(100% + 6px); right: 0; z-index: 80;
+    min-width: 190px; padding: 5px; display: flex; flex-direction: column; gap: 2px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+    box-shadow: 0 12px 32px var(--shadow);
+  }
+  .menu-pop.wide { min-width: 260px; }
+  .menu-pop[hidden] { display: none; }
+  .menu-pop > button {
+    background: transparent; border: 0; border-radius: 5px; text-align: left;
+    padding: 6px 9px; width: 100%;
+  }
+  .menu-pop > button:hover:not(:disabled) { background: var(--panel-3); border-color: transparent; }
+  .menu-pop hr { border: 0; border-top: 1px solid var(--line); margin: 4px 2px; width: 100%; }
+  .menu-pop .row-lbl { display: flex; align-items: center; justify-content: space-between;
+                       gap: 10px; padding: 4px 9px; }
+  .menu-pop .about { padding: 4px 9px; font-size: 11px; color: var(--fg-dim); line-height: 1.6; }
+  .menu-pop .about a { color: var(--fg-dim); }
+  .menu-pop .about a:hover { color: var(--accent); }
+
+  /* ---------- plan tab ---------- */
+  /* wraps rather than overflowing: the panel is 340px and a date input plus two nudge
+     buttons does not always fit beside its label */
+  .plan-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+  .plan-row > label { flex: 1 1 auto; font-size: 12px; }
+  .plan-row .ctl { display: flex; gap: 6px; align-items: center; flex: 0 0 auto; }
+  .plan-row .ctl input[type=date] { width: 130px; }
+  .plan-row .ctl button { padding: 5px 7px; font-variant-numeric: tabular-nums; }
 
   /* ---------- layout ---------- */
   #main { flex: 1 1 auto; display: flex; min-height: 0; }
@@ -351,12 +392,16 @@
   <span class="brand">Timeline Planner <small id="file-name">plan.csv</small></span>
   <div class="sep"></div>
 
+  <!-- Tier 1: what you do constantly, and the modes that change what a drag means. These
+       stay visible because Undo/Redo are per-edit and Rigid/ASAP is live state you need to
+       see WHILE dragging - hiding it behind a menu would make the same gesture behave two
+       different ways with no visible cause. -->
   <div class="grp">
-    <label for="proj-start">Project start</label>
-    <input type="date" id="proj-start">
-    <button id="btn-shift-back" title="Shift whole plan 1 week earlier">&laquo;</button>
-    <button id="btn-shift-fwd" title="Shift whole plan 1 week later">&raquo;</button>
+    <button id="btn-undo" title="Undo (Cmd/Ctrl+Z)">Undo</button>
+    <button id="btn-redo" title="Redo (Cmd/Ctrl+Shift+Z)">Redo</button>
+    <button id="btn-add" class="primary">+ Task</button>
   </div>
+  <div class="sep"></div>
 
   <div class="grp">
     <label>Propagation</label>
@@ -376,42 +421,50 @@
     </div>
   </div>
 
-  <div class="grp">
-    <label>Theme</label>
-    <div class="seg" id="seg-theme">
-      <button data-theme="light" title="Always light">Light</button>
-      <button data-theme="dark" title="Always dark">Dark</button>
-      <button data-theme="auto" title="Follow the operating system setting">Auto</button>
+  <!-- Tier 2 and 3, pushed right. The tour button only appears until it has been taken;
+       after that it lives in Settings, so the invitation is loud exactly while it is useful
+       and then stops taking up room. -->
+  <div class="grp trailing">
+    <button id="btn-help">?</button>
+
+    <div class="menu">
+      <button id="btn-file" aria-haspopup="menu" aria-expanded="false">File</button>
+      <div class="menu-pop" id="menu-file" role="menu" hidden>
+        <button id="btn-open" role="menuitem">Open file...</button>
+        <button id="btn-download" role="menuitem">Download CSV</button>
+        <button id="btn-copy" role="menuitem"
+                title="Tab separated, so it pastes straight into spreadsheet cells">Copy for Excel</button>
+        <button id="btn-share" role="menuitem"
+                title="The plan travels inside the link - only send it to people you would send the CSV to.">Copy link</button>
+        <hr>
+        <button id="btn-reset" role="menuitem"
+                title="Discard local edits and reload the bundled example">Reset to example</button>
+      </div>
+    </div>
+
+    <div class="menu">
+      <button id="btn-settings" aria-haspopup="menu" aria-expanded="false" title="Settings">&#9881;</button>
+      <div class="menu-pop wide" id="menu-settings" role="menu" hidden>
+        <div class="row-lbl"><label>Theme</label>
+          <div class="seg" id="seg-theme">
+            <button data-theme="light" title="Always light">Light</button>
+            <button data-theme="dark" title="Always dark">Dark</button>
+            <button data-theme="auto" title="Follow the operating system setting">Auto</button>
+          </div>
+        </div>
+        <hr>
+        <button id="btn-tour" role="menuitem">Take the tour</button>
+        <hr>
+        <div class="about">
+          Gantt by <a href="https://github.com/frappe/gantt" target="_blank" rel="noopener noreferrer">Frappe Gantt</a> (MIT)<br>
+          Panels by <a href="https://preactjs.com" target="_blank" rel="noopener noreferrer">Preact</a> (MIT)
+          + <a href="https://github.com/developit/htm" target="_blank" rel="noopener noreferrer">htm</a> (Apache-2.0)<br>
+          Tour by <a href="https://github.com/kamranahmedse/driver.js" target="_blank" rel="noopener noreferrer">driver.js</a> (MIT)
+        </div>
+      </div>
     </div>
   </div>
-
-  <div class="grp">
-    <label for="team-size">Team</label>
-    <input type="number" id="team-size" min="1" max="99" value="4">
-  </div>
-
-  <div class="sep"></div>
-  <div class="grp">
-    <button id="btn-undo" title="Undo (Cmd/Ctrl+Z)">Undo</button>
-    <button id="btn-redo" title="Redo (Cmd/Ctrl+Shift+Z)">Redo</button>
-    <button id="btn-add" class="primary">+ Task</button>
-  </div>
-  <div class="sep"></div>
-  <div class="grp">
-    <button id="btn-open">Open file</button>
-    <button id="btn-download">Download CSV</button>
-    <button id="btn-copy" title="Tab separated, so it pastes straight into spreadsheet cells">Copy for Excel</button>
-    <button id="btn-share" title="Copy a link that contains this plan. The plan travels inside the link - only send it to people you would send the CSV to.">Copy link</button>
-    <button id="btn-reset" title="Discard local edits and reload the bundled file">Reset</button>
-    <button id="btn-help">?</button>
-    <input type="file" id="file-input" accept=".csv,.tsv,.txt" hidden>
-  </div>
-  <div class="grp credit">
-    Gantt by <a href="https://github.com/frappe/gantt" target="_blank" rel="noopener noreferrer">Frappe Gantt</a> (MIT),
-    panels by <a href="https://preactjs.com" target="_blank" rel="noopener noreferrer">Preact</a> (MIT)
-    + <a href="https://github.com/developit/htm" target="_blank" rel="noopener noreferrer">htm</a> (Apache-2.0),
-    tour by <a href="https://github.com/kamranahmedse/driver.js" target="_blank" rel="noopener noreferrer">driver.js</a> (MIT)
-  </div>
+  <input type="file" id="file-input" accept=".csv,.tsv,.txt" hidden>
 </div>
 
 <div id="main">
@@ -421,12 +474,14 @@
   </div>
   <div id="side">
     <div id="side-tabs">
-      <button data-tab="validate" class="on">Validation <span id="v-badge" class="badge ok">0</span></button>
+      <button data-tab="validate" class="on">Checks <span id="v-badge" class="badge ok">0</span></button>
+      <button data-tab="plan">Plan</button>
       <button data-tab="editor">Task</button>
       <button data-tab="load">Load</button>
       <button data-tab="columns">Columns</button>
     </div>
     <div class="side-body" id="tab-validate"></div>
+    <div class="side-body" id="tab-plan" hidden></div>
     <div class="side-body" id="tab-editor" hidden></div>
     <div class="side-body" id="tab-load" hidden></div>
     <div class="side-body" id="tab-columns" hidden></div>

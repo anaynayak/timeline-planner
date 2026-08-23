@@ -275,8 +275,6 @@ function selectTask(id, showEditorTab) {
 
 function renderToolbar() {
   const doc = App.doc, cal = App.cal;
-  document.getElementById('proj-start').value = cal.at(cal.nextIdx(doc.projectStart));
-  document.getElementById('team-size').value = doc.teamSize;
   const nameEl = document.getElementById('file-name');
   nameEl.textContent = App.fileName;
   nameEl.classList.toggle('example', App.isExample);
@@ -288,10 +286,13 @@ function renderToolbar() {
   document.querySelectorAll('#seg-theme button').forEach((b) => b.classList.toggle('on', b.dataset.theme === App.theme));
   /* The tour is opt-in. Until it has been taken the button says so and pulses; afterwards
    * it shrinks to a quiet "?" so it stops competing with the actual controls. */
+  /* The tour invitation is loud while it is useful and then leaves the toolbar entirely -
+   * once taken it lives only in Settings, so it stops competing for room. */
   const help = document.getElementById('btn-help');
-  help.textContent = App.tourSeen ? '?' : 'Take the tour';
+  help.hidden = App.tourSeen;
+  help.textContent = 'Take the tour';
   help.classList.toggle('invite', !App.tourSeen);
-  help.title = App.tourSeen ? 'Take the tour' : 'New here? A short guided tour of the chart';
+  help.title = 'New here? A short guided tour of the chart';
   document.getElementById('btn-undo').disabled = !App.undoStack.length;
   document.getElementById('btn-redo').disabled = !App.redoStack.length;
 }
@@ -316,6 +317,7 @@ function renderAll() {
   renderValidation(view);
   renderLoad(view);
   renderColumns(view);
+  paintPlan(html`<${PlanPanel} doc=${App.doc} cal=${App.cal} />`);
   openEditor(App.selected, view);
   persist();
 }

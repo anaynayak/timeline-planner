@@ -83,13 +83,15 @@ function tourSteps() {
       showTab: 'validate',
     },
     {
-      element: '#btn-download',
+      element: '#btn-file',
       popover: {
         title: 'Getting it back out',
         description:
-          '<b>Download CSV</b> writes a real file, columns and order preserved, including ' +
-          'any columns this tool does not understand. <b>Copy for Excel</b> puts it on the ' +
-          'clipboard tab-separated, which is what pastes into spreadsheet cells.',
+          'Everything to do with files lives here. <b>Download CSV</b> writes a real file, ' +
+          'columns and order preserved, including ones this tool does not understand. ' +
+          '<b>Copy for Excel</b> puts it on the clipboard tab-separated, which is what ' +
+          'pastes into spreadsheet cells. <b>Copy link</b> gives you a URL with the whole ' +
+          'plan inside it.',
       },
     },
   ];

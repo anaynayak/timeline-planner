@@ -108,8 +108,12 @@ column is exactly one working day and a bar's width is exactly its duration. All
 is integer arithmetic over working-day indices, which is why nothing can ever land on a
 Saturday.
 
-- **Project start** — change the date and the whole plan shifts by that many working days,
-  keeping its shape. `«` / `»` nudge by a week.
+- **Project start** (on the **Plan** tab) — change the date and the whole plan shifts by
+  that many working days, keeping its shape. `-1w` / `+1w` nudge by a week.
+- **Zoom** — `Day` / `Compact` / `Tiny` set how many pixels a working day gets (30 / 14 / 7).
+  It is a zoom, not a calendar granularity: one column is always exactly one working day,
+  which is what makes a bar's width equal its duration, so there is no week-or-month column
+  mode to switch to.
 - **Propagation** — how downstream tasks react when you move or resize one:
   - **Rigid** (default): successors shift by the same delta, preserving their current gaps.
   - **ASAP**: successors are pulled to the earliest legal start, collapsing gaps.

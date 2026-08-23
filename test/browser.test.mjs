@@ -44,6 +44,27 @@ const boot = async (mode) => {
   if (mode) await page.click(`#seg-mode button[data-mode="${mode}"]`);
   await page.waitForTimeout(250);
 };
+/* Controls that used to sit in the toolbar now live behind a menu or on the Plan tab, so
+ * reaching them takes a step. These wrap that step rather than repeating it everywhere. */
+/* Idempotent: the trigger toggles, and picking a theme deliberately leaves Settings open
+ * (you might try light then dark), so a second openMenu() must not close it. */
+const openMenu = async (id) => {
+  if ((await page.locator(id).getAttribute('aria-expanded')) !== 'true') await page.click(id);
+  await page.waitForTimeout(150);
+};
+const fileMenu = () => openMenu('#btn-file');
+const settingsMenu = () => openMenu('#btn-settings');
+const planTab = async () => {
+  await page.click('#side-tabs button[data-tab="plan"]');
+  await page.waitForTimeout(200);
+};
+/** Set a value and fire change: page.fill alone only fires input, change needs a blur. */
+const setField = async (sel, val) => {
+  await page.fill(sel, val);
+  await page.dispatchEvent(sel, 'change');
+  await page.waitForTimeout(250);
+};
+
 const idxAll = () => page.evaluate(() => {
   const o = {};
   for (const t of window.App.doc.tasks) o[t.id] = window.App.cal.nextIdx(t.start);
@@ -210,6 +231,116 @@ await page.waitForTimeout(250);
 check('undo restores the previous mapping',
   (await page.evaluate(() => window.App.doc.tasks.find((t) => t.id === 'survey').estimate)) === 5);
 
+/* ---------------------------------------------------------------- toolbar shape */
+/* The toolbar was 23 controls across 3 rows. It now carries only actions and live modes;
+ * data in/out is one File menu, Theme and the tour are behind a gear, and the two plan
+ * PROPERTIES (project start, team size) moved to the side panel where their effects are. */
+group('toolbar');
+await boot();
+const shape = await page.evaluate(() => {
+  const vis = (el) => el && !el.hidden && el.offsetParent !== null;
+  return {
+    visible: [...document.querySelectorAll('#toolbar button, #toolbar input, #toolbar select')].filter(vis).length,
+    height: Math.round(document.getElementById('toolbar').getBoundingClientRect().height),
+  };
+});
+check('the toolbar fits on one row', shape.height <= 52, shape.height + 'px');
+check('it carries far fewer visible controls than before',
+  shape.visible <= 13, String(shape.visible));
+/* Live state must stay visible: Rigid/ASAP changes what a drag does, so hiding it in a
+ * menu would make the same gesture behave two ways with no visible cause. */
+for (const sel of ['#seg-mode', '#seg-zoom', '#btn-undo', '#btn-redo', '#btn-add'])
+  check(`${sel} stays visible`, await page.locator(sel).isVisible());
+for (const sel of ['#btn-download', '#btn-copy', '#btn-share', '#btn-reset', '#btn-open'])
+  check(`${sel} is tucked into the File menu`, await page.locator(sel).isHidden());
+check('the theme control is behind the gear', await page.locator('#seg-theme').isHidden());
+
+await fileMenu();
+check('the File menu opens', await page.locator('#btn-download').isVisible());
+check('and reports its state to assistive tech',
+  (await page.locator('#btn-file').getAttribute('aria-expanded')) === 'true');
+await page.keyboard.press('Escape');
+await page.waitForTimeout(150);
+check('Escape closes it', await page.locator('#btn-download').isHidden()
+  && (await page.locator('#btn-file').getAttribute('aria-expanded')) === 'false');
+
+await fileMenu();
+await page.click('body', { position: { x: 400, y: 400 } });
+await page.waitForTimeout(200);
+check('clicking outside closes it', await page.locator('#btn-download').isHidden());
+
+await fileMenu();
+await settingsMenu();
+check('opening one menu closes the other', await page.locator('#btn-download').isHidden()
+  && await page.locator('#seg-theme').isVisible());
+await page.keyboard.press('Escape');
+
+/* Choosing a file action should get the menu out of the way. */
+await fileMenu();
+await page.click('#btn-download');
+await page.waitForTimeout(300);
+check('picking a File action closes the menu', await page.locator('#btn-download').isHidden());
+
+/* The plan properties, in their new home. */
+await boot();
+await planTab();
+check('the Plan tab holds project start and team size',
+  await page.locator('#proj-start').isVisible() && await page.locator('#team-size').isVisible());
+const ps0 = await page.evaluate(() => window.App.doc.projectStart);
+await page.click('#btn-shift-fwd');
+await page.waitForTimeout(300);
+check('the +1w nudge shifts the plan from the Plan tab',
+  (await page.evaluate(() => window.App.doc.projectStart)) !== ps0,
+  `${ps0} -> ${await page.evaluate(() => window.App.doc.projectStart)}`);
+/* htm does not decode HTML entities, so &laquo; would have rendered literally. */
+check('the nudge buttons are not raw HTML entities',
+  !/&[a-z]+;/.test(await page.locator('#tab-plan').innerText()),
+  await page.locator('#btn-shift-back').innerText());
+check('the Plan tab does not overflow its 340px panel', await page.evaluate(() => {
+  const el = document.getElementById('tab-plan');
+  return el.scrollWidth <= el.clientWidth;
+}));
+
+/* ---------------------------------------------------------------- zoom */
+/* Zoom did nothing at all: passing view_mode to frappe's constructor never took effect, so
+ * config.view_mode stayed on Day and column_width on 30 whichever button you pressed. */
+group('zoom');
+await boot();
+const zooms = [];
+for (const z of ['Day', 'Compact', 'Tiny']) {
+  await page.click(`#seg-zoom button[data-zoom="${z}"]`);
+  await page.waitForTimeout(350);
+  zooms.push(await page.evaluate(() => {
+    const g = window.App.gantt;
+    const bar = document.querySelector('#gantt .bar-wrapper[data-id="survey"] .bar');
+    const row = document.querySelector('#gutter .g-row').getBoundingClientRect();
+    const br = bar.getBoundingClientRect();
+    return {
+      mode: g.config.view_mode.name,
+      col: g.config.column_width,
+      barW: Math.round(+bar.getAttribute('width')),
+      fill: getComputedStyle(bar).fill,
+      aligned: Math.abs((br.top + br.height / 2) - (row.top + row.height / 2)) <= 1,
+      active: document.querySelector('#seg-zoom button.on').dataset.zoom,
+    };
+  }));
+}
+check('each zoom level actually applies',
+  zooms.map((z) => z.mode).join() === 'Day,Compact,Tiny', zooms.map((z) => z.mode).join());
+check('the column width really changes',
+  new Set(zooms.map((z) => z.col)).size === 3, zooms.map((z) => z.col).join());
+check('a bar scales with the column width',
+  zooms[0].barW > zooms[1].barW && zooms[1].barW > zooms[2].barW,
+  zooms.map((z) => z.barW).join(' > '));
+check('a bar is still exactly its duration in columns',
+  zooms.every((z) => z.barW === z.col * 5), zooms.map((z) => `${z.barW}/${z.col}`).join(' '));
+/* change_view_mode re-renders the SVG, so the tag colours and gutter must be re-applied. */
+check('tag colours survive a zoom change',
+  zooms.every((z) => /^rgb/.test(z.fill) && z.fill !== 'rgb(0, 0, 0)'), zooms[2].fill);
+check('the gutter stays row-aligned at every zoom', zooms.every((z) => z.aligned));
+check('the active zoom button matches the state',
+  zooms.map((z) => z.active).join() === 'Day,Compact,Tiny');
+
 /* ---------------------------------------------------------------- share links */
 /* The plan travels in the URL fragment, which the browser never sends to a server. These
  * check the round trip end to end, and that a link cannot wedge the app. */
@@ -328,6 +459,7 @@ for (const [label, frag] of [
 await boot();
 const ctxPerm = page.context();
 await ctxPerm.grantPermissions(['clipboard-read', 'clipboard-write']).catch(() => {});
+await fileMenu();
 await page.click('#btn-share');
 await page.waitForTimeout(500);
 const clip = await page.evaluate(() => navigator.clipboard.readText()).catch(() => '');
@@ -403,7 +535,7 @@ check('the spotlight moves rather than accumulating',
   new Set(seen.map((a) => a[0])).size === seen.length, JSON.stringify(seen.map((a) => a[0])));
 check('the tour covers the chart, the task list and the export',
   seen.flat().includes('gantt') && seen.flat().includes('gutter')
-  && seen.flat().includes('btn-download'), JSON.stringify(seen.flat()));
+  && seen.flat().includes('btn-file'), JSON.stringify(seen.flat()));
 check('the tour explains the working-day axis somewhere',
   titles.join(' ').toLowerCase().includes('working day'), titles.join(' | '));
 
@@ -412,20 +544,22 @@ check('finishing removes the popover', (await page.locator('.driver-popover').co
 check('finishing leaves no element marked active',
   (await page.evaluate(() => document.querySelectorAll('.driver-active-element').length)) === 0);
 
-check('taking the tour quiets the button',
-  (await page.locator('#btn-help').innerText()).trim() === '?'
-  && !(await page.locator('#btn-help').getAttribute('class') || '').includes('invite'),
-  await page.locator('#btn-help').innerText());
+check('taking the tour removes the invitation from the toolbar',
+  await page.locator('#btn-help').isHidden());
+await settingsMenu();
+check('and it is still reachable from Settings',
+  await page.locator('#btn-tour').isVisible());
+await page.keyboard.press('Escape');
 
 await page.reload({ waitUntil: 'load' });
 await page.waitForSelector('#gantt .bar-wrapper');
 await page.waitForTimeout(400);
-check('it stays quiet on the next visit',
-  (await page.locator('#btn-help').innerText()).trim() === '?'
-  && (await page.locator('.driver-popover').count()) === 0);
-await page.click('#btn-help');
+check('it stays gone on the next visit',
+  (await page.locator('#btn-help').isHidden()) && (await page.locator('.driver-popover').count()) === 0);
+await settingsMenu();
+await page.click('#btn-tour');
 await page.waitForTimeout(300);
-check('the ? button still restarts it', (await page.locator('.driver-popover').count()) === 1);
+check('Settings > Take the tour restarts it', (await page.locator('.driver-popover').count()) === 1);
 await page.keyboard.press('Escape');
 await page.waitForTimeout(300);
 check('Escape leaves the tour', (await page.locator('.driver-popover').count()) === 0);
@@ -449,22 +583,27 @@ check('Auto follows an OS dark preference with no reload',
   (await tok('--bg')) === DARK_BG, await tok('--bg'));
 
 // OS says dark; ask for light explicitly
+await settingsMenu();
 await page.click('#seg-theme button[data-theme="light"]');
 await page.waitForTimeout(150);
 check('an explicit Light choice overrides OS dark', (await tok('--bg')) === LIGHT_BG, await tok('--bg'));
 // OS says light; ask for dark explicitly
 await page.emulateMedia({ colorScheme: 'light' });
+await settingsMenu();
 await page.click('#seg-theme button[data-theme="dark"]');
 await page.waitForTimeout(150);
 check('an explicit Dark choice overrides OS light', (await tok('--bg')) === DARK_BG, await tok('--bg'));
 
-check('the chosen theme is the one marked active in the toolbar',
+await settingsMenu();
+check('the chosen theme is the one marked active',
   (await page.locator('#seg-theme button.on').getAttribute('data-theme')) === 'dark');
+await page.keyboard.press('Escape');
 
 /* Bars carry var(--series-N), not a hex, so the browser repaints them on a token change.
  * Nothing should have to re-render for a theme switch to take effect. */
 const darkFill = await page.evaluate(() =>
   getComputedStyle(document.querySelector('#gantt .bar-wrapper .bar')).fill);
+await settingsMenu();
 await page.click('#seg-theme button[data-theme="light"]');
 await page.waitForTimeout(150);
 const lightFill = await page.evaluate(() =>
@@ -482,6 +621,7 @@ check('the selection ring is visible ink, not white-on-white', await page.evalua
 await page.reload({ waitUntil: 'load' });
 await page.waitForSelector('#gantt .bar-wrapper');
 check('the theme survives a reload', (await tok('--bg')) === LIGHT_BG, await tok('--bg'));
+await fileMenu();
 await page.click('#btn-reset');
 await page.waitForTimeout(250);
 check('Reset discards the plan but keeps the theme', (await tok('--bg')) === LIGHT_BG, await tok('--bg'));
@@ -491,6 +631,7 @@ await page.evaluate(() => localStorage.clear());
 await page.reload({ waitUntil: 'load' });
 await page.waitForSelector('#gantt .bar-wrapper');
 const undoBefore = await page.evaluate(() => window.App.undoStack.length);
+await settingsMenu();
 await page.click('#seg-theme button[data-theme="dark"]');
 await page.waitForTimeout(150);
 check('changing the theme creates no undo entry',
@@ -600,9 +741,8 @@ check('undo reverts a propagation mode change',
   await page.evaluate(() => window.App.doc.mode));
 
 await boot();
-await page.fill('#team-size', '9');
-await page.dispatchEvent('#team-size', 'change');
-await page.waitForTimeout(200);
+await planTab();
+await setField('#team-size', '9');
 check('changing team size takes effect',
   (await page.evaluate(() => window.App.doc.teamSize)) === 9);
 await page.click('#btn-undo');
@@ -615,9 +755,8 @@ check('undo reverts a team size change',
 group('moving the project start');
 await boot();
 const b0 = await page.evaluate(() => window.App.doc.tasks.map((t) => window.App.cal.nextIdx(t.start)));
-await page.fill('#proj-start', '2027-04-01');
-await page.dispatchEvent('#proj-start', 'change');
-await page.waitForTimeout(300);
+await planTab();
+await setField('#proj-start', '2027-04-01');
 const a0 = await page.evaluate(() => window.App.doc.tasks.map((t) => window.App.cal.nextIdx(t.start)));
 const deltas = [...new Set(a0.map((v, i) => v - b0[i]))];
 check('the whole plan shifts by one identical working-day delta',

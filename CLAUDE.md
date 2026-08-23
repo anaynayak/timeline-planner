@@ -153,9 +153,32 @@ A whole plan encodes into the URL fragment so a link can be sent instead of a CS
   `.catch(() => {})` on both in `deflateRaw`/`inflateRaw`.
 - A `file://` link cannot be shared, and the toast says so rather than pretending.
 
+## Toolbar shape
+
+The toolbar carries **actions and live modes only**, and it is meant to stay on one row.
+
+- **Live state stays visible.** `Rigid`/`ASAP` changes what a drag does, so it cannot go in a
+  menu: the same gesture would behave two ways with no visible cause. Same for Undo/Redo,
+  which are per-edit.
+- **Data in and out is one `File` menu.** Open, Download CSV, Copy for Excel, Copy link and
+  Reset are one job.
+- **`Theme` and the tour live behind the gear**, with the library credits. You see a theme's
+  effect; you do not need its control on screen.
+- **Project start and team size are on the `Plan` side-panel tab, not the toolbar.** They are
+  plan *properties*, not verbs, and team size belongs beside the capacity table it drives.
+- Below 1280px the group labels are hidden - `Rigid | ASAP` says what it is, and otherwise
+  the trailing cluster's `margin-left: auto` pushes itself onto a second row.
+
+Menus are hand-rolled (`wireMenus`): `aria-expanded` on the trigger, a hidden panel, outside
+click and Escape to close. Anything with `role="menuitem"` closes the menu on activation; the
+theme segmented control deliberately does not, so you can try light then dark.
+
+**htm does not decode HTML entities.** `&laquo;` in a template renders literally. The Plan
+tab's nudge buttons say `-1w` / `+1w`, which is plain ASCII and clearer than chevrons.
+
 ## Frappe Gantt gotchas
 
-These are load-bearing. All four were found the hard way:
+These are load-bearing. All five were found the hard way:
 
 1. **`ignore: ['weekend']` does not compress the axis.** It hatches non-working columns and
    keeps a calendar axis, so a 10-working-day bar would be 12 columns wide. Hence workday
@@ -168,7 +191,13 @@ These are load-bearing. All four were found the hard way:
    space-separated string throws and only one bar renders. State classes and tag colours are
    applied after render in `markBars()`.
 
-4. **frappe ships its own dark theme under `html[data-theme=dark]`** — the very attribute
+4. **`view_mode` passed to the constructor does not work.** frappe resolves it once and
+   `config.view_mode` stays on `Day` whatever you hand it, so rebuilding the chart left the
+   column width at 30 and the zoom control did nothing at all for its entire existence. Use
+   `gantt.change_view_mode(name, true)` instead - which is better anyway, because it keeps
+   the scroll position a rebuild would discard. It re-renders the SVG, so `markBars()` and
+   the gutter have to be re-applied afterwards.
+5. **frappe ships its own dark theme under `html[data-theme=dark]`** — the very attribute
    our toggle sets. So any `--g-*` token we leave unset takes frappe's *dark* default when
    the toggle says dark, but its *light* default under OS-dark with the toggle on Auto. That
    split had `--g-weekend-highlight-color` flashing near-white on column hover in one dark

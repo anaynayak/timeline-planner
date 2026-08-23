@@ -16,7 +16,7 @@ function toast(msg) {
 
 function showTab(name) {
   document.querySelectorAll('#side-tabs button').forEach((b) => b.classList.toggle('on', b.dataset.tab === name));
-  ['validate', 'editor', 'load', 'columns'].forEach((n) => { document.getElementById('tab-' + n).hidden = n !== name; });
+  ['validate', 'plan', 'editor', 'load', 'columns'].forEach((n) => { document.getElementById('tab-' + n).hidden = n !== name; });
 }
 
 /* The async clipboard API needs a permission a file:// origin often does not have, so fall
@@ -60,32 +60,47 @@ async function loadFromHash() {
   }
 }
 
-function wireUI() {
-  document.querySelectorAll('#side-tabs button').forEach((b) => { b.onclick = () => showTab(b.dataset.tab); });
+/* Menus, by hand rather than <details>: aria-expanded on the trigger plus a hidden panel
+ * gives the right semantics, and it needs only outside-click and Escape to feel native.
+ * Everything inside a menu closes it on activation, so no item needs to remember to. */
+function closeMenus(except) {
+  for (const m of document.querySelectorAll('.menu')) {
+    const pop = m.querySelector('.menu-pop');
+    const btn = m.querySelector('button[aria-haspopup]');
+    if (!pop || !btn || m === except) continue;
+    pop.hidden = true;
+    btn.setAttribute('aria-expanded', 'false');
+  }
+}
 
-  document.getElementById('proj-start').onchange = (e) => {
-    if (!e.target.value) return;
-    if (!App.cal.inRange(e.target.value)) {
-      toast(`Project start must be between ${App.cal.first} and ${App.cal.last}`);
-      renderToolbar();   // put the field back to the value the plan actually has
-      return;
-    }
-    const oldIdx = App.cal.nextIdx(App.doc.projectStart);
-    const newIdx = App.cal.nextIdx(e.target.value);
-    if (newIdx === oldIdx) return;   // don't spend an undo entry on a no-op
-    commit(() => {
-      App.doc.projectStart = App.cal.at(newIdx);
-      shiftAll(App.doc, App.cal, newIdx - oldIdx);
+function wireMenus() {
+  for (const m of document.querySelectorAll('.menu')) {
+    const btn = m.querySelector('button[aria-haspopup]');
+    const pop = m.querySelector('.menu-pop');
+    if (!btn || !pop) continue;
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      const open = pop.hidden;
+      closeMenus(m);
+      pop.hidden = !open;
+      btn.setAttribute('aria-expanded', String(open));
+    };
+    // an action inside the menu has served its purpose; get out of the way
+    pop.addEventListener('click', (e) => {
+      if (e.target.closest('button[role="menuitem"]')) closeMenus();
     });
-    toast(`Whole plan shifted ${newIdx - oldIdx > 0 ? '+' : ''}${newIdx - oldIdx} working days`);
-  };
-  const nudge = (wd) => commit(() => {
-    const i = App.cal.nextIdx(App.doc.projectStart) + wd;
-    App.doc.projectStart = App.cal.at(Math.max(0, i));
-    shiftAll(App.doc, App.cal, wd);
+  }
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.menu')) closeMenus();
   });
-  document.getElementById('btn-shift-back').onclick = () => nudge(-5);
-  document.getElementById('btn-shift-fwd').onclick = () => nudge(5);
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeMenus();
+  });
+}
+
+function wireUI() {
+  wireMenus();
+  document.querySelectorAll('#side-tabs button').forEach((b) => { b.onclick = () => showTab(b.dataset.tab); });
 
   document.querySelectorAll('#seg-mode button').forEach((b) => {
     b.onclick = () => {
@@ -100,8 +115,27 @@ function wireUI() {
     commit(() => asapAll(App.doc, App.cal));
     toast('Reflowed ASAP');
   };
+  /* Zoom goes through frappe's own change_view_mode, NOT through renderAll().
+   *
+   * Passing `view_mode: <name>` to the constructor does not work: frappe resolves it once
+   * and config.view_mode stays on Day whatever we hand it, so rebuilding the chart left the
+   * column width at 30 and the control did nothing at all. change_view_mode(name, true)
+   * applies it correctly and keeps the scroll position, which a rebuild would throw away.
+   *
+   * It re-renders the SVG, so the bar colours and the gutter have to be re-applied after -
+   * same reason markBars() exists in the first place. */
   document.querySelectorAll('#seg-zoom button').forEach((b) => {
-    b.onclick = () => { App.zoom = b.dataset.zoom; renderAll(); };
+    b.onclick = () => {
+      if (App.zoom === b.dataset.zoom) return;
+      App.zoom = b.dataset.zoom;
+      if (App.gantt) {
+        App.gantt.change_view_mode(App.zoom, true);
+        const view = viewOf(App.doc, App.cal);
+        markBars(App.doc, view.an, view.colors);
+        renderGutter(App.doc, view.an, view.colors);
+      }
+      renderToolbar();
+    };
   });
   /* Not routed through commit(): the theme is not part of the plan, so it must not enter
    * the undo stack. Nothing needs re-rendering either - the bars and dots are painted
@@ -109,12 +143,6 @@ function wireUI() {
   document.querySelectorAll('#seg-theme button').forEach((b) => {
     b.onclick = () => { applyTheme(b.dataset.theme); renderToolbar(); };
   });
-  document.getElementById('team-size').onchange = (e) => {
-    const n = Math.max(1, Number(e.target.value) || 1);
-    if (n === App.doc.teamSize) return;   // don't spend an undo entry on a no-op
-    commit(() => { App.doc.teamSize = n; });
-  };
-
   document.getElementById('btn-undo').onclick = undo;
   document.getElementById('btn-redo').onclick = redo;
   document.getElementById('btn-add').onclick = () => {
@@ -169,7 +197,9 @@ function wireUI() {
       : 'Could not write to the clipboard');
   };
   // driver.js handles its own overlay, keyboard and dismissal; we only own "seen" state
-  document.getElementById('btn-help').onclick = () => { startTour(); renderToolbar(); };
+  const openTour = () => { closeMenus(); startTour(); renderToolbar(); };
+  document.getElementById('btn-help').onclick = openTour;
+  document.getElementById('btn-tour').onclick = openTour;
 
   /* The plan travels INSIDE the link, in the fragment. That is what makes it work offline
    * and keeps it off any server, and it is also why the toast says so plainly: a link is
