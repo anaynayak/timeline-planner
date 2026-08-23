@@ -879,6 +879,21 @@ const dropFile = (name, text) => page.evaluate(async ({ name, text }) => {
 }, { name, text });
 
 await boot();
+/* #drop is a flex container, so bare text beside a <code> would split into separate flex
+   items and the spaces between them would be dropped: "Drop a.csv or.tsv plan here". */
+/* It has to be visible and the whitespace must NOT be collapsed. innerText on a
+   display:none element falls back to textContent, and each stripped-out space shows up as
+   a "\n" (each flex item is its own line box) - either shortcut passes with the bug in. */
+const dropText = await page.evaluate(() => {
+  const el = document.getElementById('drop');
+  el.classList.add('on');
+  const t = el.innerText.trim();
+  el.classList.remove('on');
+  return t;
+});
+check('the dropzone keeps its spaces around .csv / .tsv',
+  dropText === 'Drop a .csv or .tsv plan here', JSON.stringify(dropText));
+
 const alias = await dropFile('aliases.csv',
   'task,effort,start,depends_on\nAlpha,5,2027-06-07,\nBeta,10,2027-06-14,Alpha\nGamma,5,2027-06-28,Beta\n');
 check('alias columns (task/effort/start/depends_on) are recognised',

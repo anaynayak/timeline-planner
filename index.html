@@ -488,7 +488,9 @@
   </div>
 </div>
 
-<div id="drop">Drop a <code>.csv</code> or <code>.tsv</code> plan here</div>
+<!-- the message is one span because #drop is a flex container: bare text either side of a
+     <code> would become separate anonymous flex items and the spaces between them vanish. -->
+<div id="drop"><span>Drop a <code>.csv</code> or <code>.tsv</code> plan here</span></div>
 <div id="toast"></div>
 <div id="selftest"></div>
 
