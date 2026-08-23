@@ -174,7 +174,7 @@ const LoadPanel = ({ doc, cal, rows }) => html`
 const ColumnsPanel = ({ doc, numCols, colors }) => {
   const extras = doc.extras.map((i) => doc.header[i]).filter((x) => x !== undefined);
   return html`
-    <${GroupH}>${`Field mapping (${doc.format === 'miro' ? 'Miro markdown' : 'CSV'})`}<//>
+    <${GroupH}>Field mapping<//>
     ${FIELDS.map((f) => html`
       <div class=${'colmap' + (doc.mapping[f.key] < 0 ? ' unmapped' : '')} key=${f.key}>
         <label>${f.label}</label>

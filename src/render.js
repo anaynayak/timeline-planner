@@ -128,7 +128,7 @@ function renderGantt(view) {
   view = view || viewOf(doc, cal);
   const el = document.getElementById('gantt');
   if (!doc.tasks.length) {
-    el.innerHTML = '<div id="gantt-empty">No tasks. Drop a .md file or add one.</div>';
+    el.innerHTML = '<div id="gantt-empty">No tasks. Drop a .csv file or add one.</div>';
     paintGutter(null);   // Preact owns #gutter; never innerHTML it from outside
     App.gantt = null;
     return;

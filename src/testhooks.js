@@ -10,7 +10,7 @@ window.App = App;
 window.__buildDoc = buildDoc;
 window.__makeCalendar = makeCalendar;
 window.__toCSV = () => docToCSV(App.doc, App.cal);
-window.__toMiro = () => docToMiro(App.doc, App.cal);
+window.__toTSV = () => docToTSV(App.doc, App.cal);
 window.__parseAny = parseAny;
 window.__parseCSV = parseCSV;
 window.__remap = remapColumn;

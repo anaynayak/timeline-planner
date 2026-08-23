@@ -1,9 +1,11 @@
-/* Tabular formats: CSV and Miro markdown. Pure.
+/* Tabular formats: delimited text in, CSV or TSV out. Pure.
  *
- * CSV is the primary format. Columns are matched to canonical fields by alias, so a file
- * can call the name column "name", "title" or "task" and still load; anything unmapped is
- * carried through untouched so exporting never loses data. Miro Timeline markdown exports
- * are also accepted, since that is where these plans tend to start life.
+ * Columns are matched to canonical fields by alias, so a file can call the name column
+ * "name", "title" or "task" and still load; anything unmapped is carried through untouched
+ * so exporting never loses data. The delimiter is sniffed on the way in, so .csv and .tsv
+ * both work. On the way out there are two shapes and the difference matters: a downloaded
+ * file is CSV, because Excel parses that when opening; the clipboard gets TSV, because
+ * Excel only splits *pasted* text on tabs.
  */
 'use strict';
 
@@ -88,10 +90,10 @@ function parseCSV(text, delim) {
   return rows.filter((r) => r.some((c) => String(c).trim() !== ''));
 }
 
-/* Spreadsheet exports (Miro's included) wrap values that a spreadsheet would read as a
- * formula in single quotes, so a task called "% Split" arrives as "'% Split'" in the Title
- * column while the dependency column still says "% Split". Strip it on the way in and
- * re-apply it on the way out, so names match and the export stays injection-safe. */
+/* Spreadsheet exports wrap values that a spreadsheet would otherwise read as a formula in
+ * single quotes, so a task called "% Split" arrives as "'% Split'" in the name column while
+ * the dependency column still says "% Split". Strip it on the way in and re-apply it on the
+ * way out, so names match and what we hand back to Excel stays injection-safe. */
 const FORMULA_START = /^[=+\-@%]/;
 
 function unquoteFormula(s) {
@@ -111,53 +113,18 @@ function csvCell(v) {
 }
 const toCSV = (rows) => rows.map((r) => r.map(csvCell).join(',')).join('\n') + '\n';
 
-/* ---------- Miro markdown ---------- */
-
-const ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', '#39': "'" };
-
-function unescapeMiro(s) {
-  return String(s)
-    .replace(/&(#?\w+);/g, (m, e) => (e in ENTITIES ? ENTITIES[e] : m))
-    .replace(/\\(.)/g, '$1');
-}
-/* Reproduces Miro's own escaping: & becomes an entity, and - . # + ( ) | are backslashed. */
-function escapeMiro(s) {
-  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/([-.#+()|])/g, '\\$1');
-}
-
-/** Split a markdown table row on unescaped pipes. */
-function splitRow(line) {
-  const s = line.trim().replace(/^\|/, '').replace(/\|$/, '');
-  const out = [];
-  let cur = '';
-  for (let i = 0; i < s.length; i++) {
-    const c = s[i];
-    if (c === '\\' && i + 1 < s.length) { cur += c + s[i + 1]; i++; continue; }
-    if (c === '|') { out.push(cur); cur = ''; continue; }
-    cur += c;
-  }
-  out.push(cur);
-  return out.map((x) => x.trim());
-}
-
-/** Miro markdown -> { header, rows, preamble }. */
-function parseMiroTable(text) {
-  const preamble = [];
-  let header = null;
-  const rows = [];
-  for (const line of String(text).split(/\r?\n/)) {
-    const t = line.trim();
-    if (t.startsWith('|')) {
-      const cells = splitRow(t);
-      if (!header) { header = cells.map(unescapeMiro); continue; }
-      if (cells.every((c) => /^:?-{2,}:?$/.test(c.trim()))) continue;
-      rows.push(cells.map(unescapeMiro));
-    } else if (!header && t) {
-      preamble.push(line);
-    }
-  }
-  return { header, rows, preamble };
-}
+/* ---------- clipboard (tab separated) ----------
+ *
+ * Excel and Sheets only split *pasted* text on tabs - paste comma-separated text and the
+ * whole row lands in one cell until you run Text-to-Columns. So the clipboard gets TSV
+ * while the downloaded file stays real CSV, which Excel parses correctly when opening it.
+ *
+ * A tab or a newline inside a cell would break the row/column structure on paste, and
+ * there is no quoting convention that Excel honours for pasted text. Both collapse to a
+ * single space: lossy, but predictable, and it only affects multi-line descriptions.
+ */
+const tsvCell = (v) => quoteFormula(v).replace(/[\t\r\n]+/g, ' ');
+const toTSV = (rows) => rows.map((r) => r.map(tsvCell).join('\t')).join('\n') + '\n';
 
 /* ---------- dates ---------- */
 
@@ -279,7 +246,8 @@ function buildDoc(header, rows, cal, opts) {
     const si = startRaw ? cal.nextIdx(startRaw) : Math.max(0, cal.nextIdx(ymd(new Date())));
 
     // duration precedence: explicit duration, else the drawn start..end span, else estimate.
-    // Miro bars run Mon..Sun, so an end date is pulled back to the last working day it covers.
+    // An end date on a weekend is pulled back to the last working day it actually covers,
+    // so a bar drawn across whole calendar weeks still yields a working-day duration.
     let duration;
     if (durRaw !== '' && !isNaN(Number(durRaw))) duration = Number(durRaw);
     else if (endRaw) duration = cal.prevIdx(endRaw) - si + 1;
@@ -348,7 +316,6 @@ function buildDoc(header, rows, cal, opts) {
   const firstStart = tasks.reduce((m, t) => (m === null || t.start < m ? t.start : m), null);
 
   return {
-    format: opts.format || 'csv',
     header: header.slice(),
     // kept so a column can be re-mapped without needing the file again
     srcHeader: header.slice(),
@@ -358,7 +325,6 @@ function buildDoc(header, rows, cal, opts) {
     depSep,
     depStyle,
     dateFmt,
-    preamble: opts.preamble || [],
     tasks,
     projectStart: firstStart || ymd(new Date()),
     holidays: [],
@@ -367,19 +333,11 @@ function buildDoc(header, rows, cal, opts) {
   };
 }
 
-/** Load a CSV or a Miro markdown export, detecting which by content. */
+/** Load a delimited plan. The delimiter is sniffed, so .csv and .tsv both work. */
 function parseAny(text, fileName, cal, opts) {
-  const s = String(text);
-  const looksMiro = /^\s*\|.*\|/m.test(s) && /\|\s*:?-{2,}/m.test(s);
-  if (looksMiro && !/\.csv$/i.test(fileName || '')) {
-    const { header, rows, preamble } = parseMiroTable(s);
-    if (!header) throw new Error('No markdown table found.');
-    return buildDoc(header, rows, cal, Object.assign({ format: 'miro', preamble }, opts));
-  }
-  const rows = parseCSV(s);
+  const rows = parseCSV(String(text));
   if (!rows.length) throw new Error('Empty file.');
-  return buildDoc(rows[0].map((h) => String(h).trim()), rows.slice(1), cal,
-    Object.assign({ format: 'csv' }, opts));
+  return buildDoc(rows[0].map((h) => String(h).trim()), rows.slice(1), cal, opts);
 }
 
 /* ---------- plan document -> rows ---------- */
@@ -397,11 +355,8 @@ function docRows(doc, cal) {
     put('name', t.name);
     put('description', t.description || '');
     put('tag', t.tags.join(', '));
-    // Miro draws whole Mon..Sun weeks; a CSV keeps the true working-day dates
-    const sOut = doc.format === 'miro' ? ymd(mondayOf(parseYMD(cal.at(si)))) : cal.at(si);
-    const eOut = doc.format === 'miro' ? ymd(sundayOf(parseYMD(cal.at(ei)))) : cal.at(ei);
-    put('start_date', formatDateCell(sOut, doc.dateFmt));
-    put('end_date', formatDateCell(eOut, doc.dateFmt));
+    put('start_date', formatDateCell(cal.at(si), doc.dateFmt));
+    put('end_date', formatDateCell(cal.at(ei), doc.dateFmt));
     put('estimate', t.estimate == null ? '' : String(t.estimate));
     put('duration', String(t.duration));
     put('pinned', t.pinned ? 'yes' : '');
@@ -414,21 +369,8 @@ function docRows(doc, cal) {
   return out;
 }
 
-/* Mon..Sun snapping is a Miro display convention, so a CSV always carries the true
- * working-day dates regardless of where the plan was imported from. */
-const docToCSV = (doc, cal) =>
-  toCSV([doc.header].concat(docRows(Object.assign({}, doc, { format: 'csv' }), cal)));
+/** A real CSV file: quoted where needed, so Excel parses it correctly on open. */
+const docToCSV = (doc, cal) => toCSV([doc.header].concat(docRows(doc, cal)));
 
-/** Miro-shaped markdown: Monday starts, Sunday ends, Miro escaping. */
-function docToMiro(doc, cal) {
-  const out = [];
-  for (const p of doc.preamble) out.push(p);
-  if (doc.preamble.length && doc.preamble[doc.preamble.length - 1].trim() !== '') out.push('');
-  out.push('| ' + doc.header.map(escapeMiro).join(' | ') + ' |');
-  out.push('| ' + doc.header.map(() => '---').join(' | ') + ' |');
-  const miroDoc = Object.assign({}, doc, { format: 'miro', dateFmt: 'isoz' });
-  for (const cells of docRows(miroDoc, cal)) {
-    out.push('| ' + cells.map(escapeMiro).join(' | ') + ' |');
-  }
-  return out.join('\n') + '\n';
-}
+/** The same table, tab separated, for pasting straight into a spreadsheet. */
+const docToTSV = (doc, cal) => toTSV([doc.header].concat(docRows(doc, cal)));

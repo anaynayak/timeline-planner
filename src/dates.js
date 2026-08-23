@@ -19,5 +19,4 @@ const daysBetween = (a, b) =>
   Math.round((new Date(b.getFullYear(), b.getMonth(), b.getDate()) -
               new Date(a.getFullYear(), a.getMonth(), a.getDate())) / MS_DAY);
 const mondayOf = (d) => addDays(d, -((d.getDay() + 6) % 7));
-const sundayOf = (d) => addDays(mondayOf(d), 6);
 const fmtNice = (s) => { const d = parseYMD(s); return d.getDate() + ' ' + MONTHS[d.getMonth()] + ' ' + d.getFullYear(); };

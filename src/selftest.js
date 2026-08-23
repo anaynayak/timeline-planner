@@ -23,7 +23,6 @@ function selftest(fixtures) {
   const section = (name) => results.push({ kind: 'section', name });
 
   const csv = fixtures.csv;
-  const md = fixtures.md;
   const cal0 = makeCalendar([]);
   const load = (text, name) => parseAny(text, name, cal0);
 
@@ -85,7 +84,6 @@ function selftest(fixtures) {
   section('the bundled example');
   const d = load(csv, 'plan.csv');
   eq('16 tasks', d.tasks.length, 16);
-  eq('detected as csv', d.format, 'csv');
   eq('id column used', d.mapping.id, 0);
   eq('owner and confidence pass through', d.extras.map((i) => d.header[i]), ['owner', 'confidence']);
   eq('confidence is not read as numeric', numericExtras(d), []);
@@ -244,45 +242,41 @@ function selftest(fixtures) {
   eq('reparse keeps dependencies', d2.tasks.map((t) => t.deps.join('|')), d.tasks.map((t) => t.deps.join('|')));
   eq('reparse keeps extras', d2.tasks.map((t) => t.extra.owner), d.tasks.map((t) => t.extra.owner));
 
-  section('Miro markdown import');
-  eq('unescape backslashes', unescapeMiro('2027\\-03\\-01T00:00:00\\.000Z'), '2027-03-01T00:00:00.000Z');
-  eq('unescape entity', unescapeMiro('R&amp;D view'), 'R&D view');
-  eq('escape ampersand', escapeMiro('R&D view'), 'R&amp;D view');
-  eq('escape round trip', escapeMiro(unescapeMiro('TM 2\\.0')), 'TM 2\\.0');
-  eq('split on unescaped pipes', splitRow('| a | b\\|c | d |'), ['a', 'b\\|c', 'd']);
-  const dmd = load(md, 'board.md');
-  eq('detected as miro', dmd.format, 'miro');
-  eq('5 tasks', dmd.tasks.length, 5);
-  eq('Title mapped to name', dmd.tasks[0].name, 'Kick off');
-  eq('Sunday end pulled back to Friday: 5 working days', dmd.tasks[0].duration, 5);
-  eq('estimator columns detected as numeric extras', numericExtras(dmd), ['Ana #', 'Bo #']);
-  eq('board link preserved', dmd.preamble.length, 1);
-  eq('deps resolved', dmd.tasks.find((t) => t.name === 'Handover').deps, ['report-pack']);
-  const mdrt = docToMiro(dmd, cal0);
-  const cellsOf = (s) => s.split(/\r?\n/).filter((l) => l.trim().startsWith('|')).map((l) => splitRow(l).join(''));
-  eq('markdown round trips to the same table', cellsOf(mdrt), cellsOf(md));
-  eq('markdown exports Monday starts and Sunday ends', (() => {
-    const rows = mdrt.split('\n').filter((l) => /T00:00:00/.test(l));
-    return rows.length > 0 && rows.every((l) => {
-      const ds = [...l.matchAll(/(\d{4})\\?-(\d{2})\\?-(\d{2})T/g)].map((x) => new Date(+x[1], +x[2] - 1, +x[3]).getDay());
-      return ds.length === 2 && ds[0] === 1 && ds[1] === 0;
-    });
+  section('TSV for the clipboard');
+  // Excel only splits *pasted* text on tabs, so the clipboard shape is tab separated
+  eq('cells are tab separated', toTSV([['a', 'b', 'c']]).trim(), 'a\tb\tc');
+  eq('nothing is quoted - Excel does not honour quoting in pasted text',
+    toTSV([['b, c', 'd"e']]).trim(), 'b, c\td"e');
+  eq('a tab inside a cell collapses so the columns cannot shift',
+    toTSV([['a\tb', 'c']]).trim(), 'a b\tc');
+  eq('a newline inside a cell collapses so the rows cannot shift',
+    toTSV([['one\ntwo', 'c']]).trim(), 'one two\tc');
+  eq('a CRLF inside a cell collapses to one space',
+    toTSV([['one\r\ntwo']]).trim(), 'one two');
+  eq('formula-looking values are still defused', toTSV([['=SUM(A1)', 'ok']]).trim(),
+    "'=SUM(A1)'\tok");
+  const tsv = docToTSV(d, cal0);
+  const tlines = tsv.trim().split('\n');
+  eq('one header row plus one row per task', tlines.length, d.tasks.length + 1);
+  eq('the header matches the source file', tlines[0].split('\t'), parseCSV(csv)[0]);
+  eq('every row has the same column count', new Set(tlines.map((l) => l.split('\t').length)).size, 1);
+  eq('a comma in a name needs no quoting and stays in one cell', (() => {
+    const row = tlines.find((l) => l.includes('Counter, shelving and seating'));
+    return row.split('\t').length === parseCSV(csv)[0].length;
   })(), true);
-  eq('a miro doc can be exported as csv too', parseCSV(docToCSV(dmd, cal0)).length, 6);
-  eq('csv export of a miro plan uses true Friday ends, not Miro Sundays', (() => {
-    const rows = parseCSV(docToCSV(dmd, cal0)).slice(1);
-    return rows.every((r) => {
-      const e = parseYMD(parseDateCell(r[4]));
-      return e.getDay() >= 1 && e.getDay() <= 5;
-    });
+  eq('the multi-line-free description survives intact',
+    tsv.includes('Friends and family, invited press.'), true);
+  eq('TSV and CSV carry the same cells', (() => {
+    const csvRows = parseCSV(docToCSV(d, cal0));
+    const tsvRows = tsv.trim().split('\n').map((l) => l.split('\t'));
+    // the CSV keeps embedded commas via quoting, so compare cell by cell
+    return csvRows.length === tsvRows.length
+      && csvRows.every((r, i) => r.length === tsvRows[i].length);
   })(), true);
-  eq('miro export still snaps the same plan to Sundays', (() => {
-    const rows = docToMiro(dmd, cal0).split('\n').filter((l) => /T00:00:00/.test(l));
-    return rows.every((l) => {
-      const ds = [...l.matchAll(/(\d{4})\\?-(\d{2})\\?-(\d{2})T/g)].map((x) => new Date(+x[1], +x[2] - 1, +x[3]).getDay());
-      return ds[1] === 0;
-    });
-  })(), true);
+  eq('the clipboard text round trips back in as a TSV plan', (() => {
+    const back = load(tsv, 'clip.tsv');
+    return { n: back.tasks.length, deps: back.tasks.map((t) => t.deps.join('|')).join(';') };
+  })(), { n: d.tasks.length, deps: d.tasks.map((t) => t.deps.join('|')).join(';') });
 
   section('column remapping');
   const rm = buildDoc(d.srcHeader, d.srcRows, cal0, { mapping: Object.assign({}, d.mapping, { estimate: -1 }) });

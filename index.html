@@ -225,9 +225,9 @@
   <div class="grp">
     <button id="btn-open">Open file</button>
     <button id="btn-download">Download CSV</button>
-    <button id="btn-copy">Copy for Miro</button>
+    <button id="btn-copy" title="Tab separated, so it pastes straight into spreadsheet cells">Copy for Excel</button>
     <button id="btn-reset" title="Discard local edits and reload the bundled file">Reset</button>
-    <input type="file" id="file-input" accept=".csv,.md,.markdown,.txt,.tsv" hidden>
+    <input type="file" id="file-input" accept=".csv,.tsv,.txt" hidden>
   </div>
   <div class="grp credit">
     Gantt by <a href="https://github.com/frappe/gantt" target="_blank" rel="noopener noreferrer">Frappe Gantt</a> (MIT),
@@ -255,7 +255,7 @@
   </div>
 </div>
 
-<div id="drop">Drop a <code>.csv</code> plan or a Miro <code>.md</code> export here</div>
+<div id="drop">Drop a <code>.csv</code> or <code>.tsv</code> plan here</div>
 <div id="toast"></div>
 <div id="selftest"></div>
 
@@ -278,16 +278,6 @@ soft,Soft launch week,"Friends and family, invited press.",Launch,2027-05-10,202
 open,Public opening,,Launch,2027-05-17,2027-05-21,5,Ada,high,Soft launch week
 </script>
 
-<script type="text/plain" id="sample-md">*[Example board](https://example.invalid/board)*
-
-| Title | Description | Tag | Start Date | End Date | Estimate | Ana \# | Bo \# | Blocked by |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Kick off | Agree scope \+ owners\. | Setup | 2027\-03\-01T00:00:00\.000Z | 2027\-03\-07T00:00:00\.000Z | 5 | 5 | 5 |  |
-| Draft schema | Tables \(core, staging\) | Build | 2027\-03\-08T00:00:00\.000Z | 2027\-03\-21T00:00:00\.000Z | 10 | 10 | 5 | Kick off |
-| Ingest job | | Build | 2027\-03\-22T00:00:00\.000Z | 2027\-03\-28T00:00:00\.000Z | 10 | 10 | 10 | Draft schema |
-| Report pack | R&amp;D view \+ exec view | Build | 2027\-03\-29T00:00:00\.000Z | 2027\-04\-11T00:00:00\.000Z | 10 | 5 | 10 | Ingest job |
-| Handover | | Setup | 2027\-04\-12T00:00:00\.000Z | 2027\-04\-18T00:00:00\.000Z | 5 | 5 | 5 | Report pack |
-</script>
 
 <script src="vendor/frappe-gantt.umd.js"></script>
 <!-- preact + hooks + htm in one prebuilt UMD bundle, global `htmPreact`. Classic script,

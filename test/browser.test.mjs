@@ -404,19 +404,23 @@ check('the new task appears in the gutter', (await page.locator('#gutter .g-row'
 /* ---------------------------------------------------------------- export */
 group('export');
 await boot();
-const out = await page.evaluate(() => ({ csv: window.__toCSV(), miro: window.__toMiro() }));
+const out = await page.evaluate(() => ({ csv: window.__toCSV(), tsv: window.__toTSV() }));
 check('the CSV keeps the original header verbatim',
   out.csv.split('\n')[0] === 'id,name,description,tag,start_date,end_date,estimate,owner,confidence,blocked by',
   out.csv.split('\n')[0]);
 check('a comma-containing name is quoted', /"Counter, shelving and seating"/.test(out.csv));
-check('the Miro table snaps to Monday starts and Sunday ends', (() => {
-  const rows = out.miro.split('\n').filter((l) => /T00:00:00/.test(l));
-  return rows.length === 16 && rows.every((l) => {
-    const ds = [...l.matchAll(/(\d{4})\\?-(\d{2})\\?-(\d{2})T/g)]
-      .map((x) => new Date(+x[1], +x[2] - 1, +x[3]).getDay());
-    return ds.length === 2 && ds[0] === 1 && ds[1] === 0;
-  });
-})());
+/* The clipboard shape is TSV because Excel only splits pasted text on tabs. Every row must
+ * therefore have exactly as many tab-separated cells as the header, with no quoting. */
+const tlines = out.tsv.trim().split('\n');
+const twidths = [...new Set(tlines.map((l) => l.split('\t').length))];
+check('the TSV is one header row plus one row per task', tlines.length === 17,
+  String(tlines.length));
+check('every TSV row has the same cell count as the header',
+  twidths.length === 1 && twidths[0] === 10, JSON.stringify(twidths));
+check('a comma-containing name stays in a single TSV cell without quotes', (() => {
+  const row = tlines.find((l) => l.includes('Counter, shelving and seating'));
+  return !!row && !row.includes('"') && row.split('\t').length === 10;
+})(), (tlines.find((l) => l.includes('Counter,')) || '').slice(0, 80));
 const re = await page.evaluate((csv) => {
   const cal = window.__makeCalendar([]);
   const d = window.__parseAny(csv, 'plan.csv', cal);

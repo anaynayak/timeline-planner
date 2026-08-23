@@ -108,24 +108,29 @@ function wireUI() {
     const text = docToCSV(App.doc, App.cal);
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([text], { type: 'text/csv' }));
-    a.download = App.fileName.replace(/\.(csv|md|markdown|txt)$/i, '') + '.csv';
+    a.download = App.fileName.replace(/\.(csv|tsv|txt)$/i, '') + '.csv';
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 2000);
     toast('Downloaded ' + a.download);
   };
+  /* Tab separated, not comma: Excel and Sheets only split pasted text on tabs, so pasting
+   * CSV would drop every row into a single cell. The downloaded file stays real CSV. */
   document.getElementById('btn-copy').onclick = async () => {
-    const text = docToMiro(App.doc, App.cal);
+    const text = docToTSV(App.doc, App.cal);
+    const rows = App.doc.tasks.length;
+    const done = () => toast(`${rows} row${rows === 1 ? '' : 's'} copied - paste into Excel`);
     try {
       await navigator.clipboard.writeText(text);
-      toast('Markdown table copied - paste into Miro');
+      done();
     } catch (err) {
+      // clipboard API needs a permission the file:// origin may not have; fall back
       const ta = document.createElement('textarea');
       ta.value = text;
       document.body.appendChild(ta);
       ta.select();
       document.execCommand('copy');
       ta.remove();
-      toast('Copied (fallback)');
+      done();
     }
   };
   document.getElementById('btn-reset').onclick = () => {
@@ -161,10 +166,7 @@ function wireUI() {
  *  "PASS"/"FAIL" and the "N passed, N failed" summary are load-bearing: test/ greps them. */
 function renderSelftest() {
   const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
-  const r = selftest({
-    csv: document.getElementById('sample-csv').textContent,
-    md: document.getElementById('sample-md').textContent,
-  });
+  const r = selftest({ csv: document.getElementById('sample-csv').textContent });
   const body = r.results.map((x) => x.kind === 'section'
     ? `<h2>${esc(x.name)}</h2>`
     : `<div class="${x.ok ? 'p' : 'f'}">${x.ok ? 'PASS' : 'FAIL'} ${esc(x.name)}` +

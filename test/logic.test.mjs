@@ -58,7 +58,6 @@ for (const f of PURE) {
 
 const { pass, fail, results } = vm.runInContext('selftest', sandbox)({
   csv: fixture('sample-csv'),
-  md: fixture('sample-md'),
 });
 
 for (const r of results) {
