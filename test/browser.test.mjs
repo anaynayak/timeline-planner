@@ -113,6 +113,24 @@ check('every task in the example renders a bar',
   (await page.locator('#gantt .bar-wrapper').count()) === 16,
   String(await page.locator('#gantt .bar-wrapper').count()));
 check('the gutter has one row per bar', (await page.locator('#gutter .g-row').count()) === 16);
+/* Clicking a name in the gutter selects the task AND reveals the editor. A single click
+ * on a bar only selects; only a double click switches tab. */
+await page.click('#side-tabs button[data-tab="validate"]');
+await page.click('#gutter .g-row');
+await page.waitForTimeout(200);
+check('clicking a gutter row opens the task editor tab',
+  !(await page.locator('#tab-editor').isHidden()),
+  'tab-editor hidden after gutter click');
+check('clicking a gutter row selects that task',
+  (await page.evaluate(() => window.App.selected)) === 'survey',
+  String(await page.evaluate(() => window.App.selected)));
+await page.click('#side-tabs button[data-tab="validate"]');
+// dispatched rather than page.click: the SVG bar-label sits on top and intercepts hits
+await page.evaluate(() => document.querySelector('#gantt .bar-wrapper .bar')
+  .dispatchEvent(new MouseEvent('click', { bubbles: true })));
+await page.waitForTimeout(200);
+check('a single click on a bar does not switch tab',
+  await page.locator('#tab-editor').isHidden());
 check('no console errors (a multi-token custom_class used to throw here)',
   errors.length === 0, errors.slice(0, 4).join(' | '));
 check('dependency arrows are drawn', (await page.locator('#gantt .arrow path').count()) >= 15,
@@ -173,6 +191,10 @@ check('unmapped columns are listed as pass-through', /owner, confidence/i.test(c
 check('there is a mapping control per canonical field',
   (await page.locator('#tab-columns .colmap').count()) === 10,
   String(await page.locator('#tab-columns .colmap').count()));
+/* `numCols.length && html`...`` rendered a literal "0" here when there were no numeric
+ * columns, because Preact prints the number 0 rather than treating it as empty. */
+check('no stray "0" leaks out of an empty conditional block',
+  !/^\s*0\s*$/m.test(ctext), JSON.stringify(ctext.split('\n').slice(0, 30)));
 check('unmapping a field clears it and makes the column pass-through',
   await page.evaluate(() => {
     window.__remap('estimate', -1);
@@ -184,6 +206,115 @@ await page.click('#btn-undo');
 await page.waitForTimeout(250);
 check('undo restores the previous mapping',
   (await page.evaluate(() => window.App.doc.tasks.find((t) => t.id === 'survey').estimate)) === 5);
+
+/* ---------------------------------------------------------------- diffing panels */
+/* The panels are Preact components so a re-render diffs in place instead of tearing the
+ * subtree down. That is what keeps input focus, caret position and scroll offsets. These
+ * checks would all fail against the old innerHTML/createElement rebuild. */
+group('panels update in place, not by teardown');
+await boot();
+await page.click('#gutter .g-row');
+await page.waitForTimeout(250);
+
+const nodeKept = await page.evaluate(() => {
+  const inp = document.querySelector('#tab-editor input[type=text]');
+  if (!inp) return 'no input';
+  inp.__probe = 'kept';
+  renderAll();
+  const after = document.querySelector('#tab-editor input[type=text]');
+  return after && after.__probe === 'kept';
+});
+check('a full re-render reuses the editor input node rather than replacing it',
+  nodeKept === true, String(nodeKept));
+
+const caretKept = await page.evaluate(() => {
+  showTab('editor');   // an element inside a hidden panel cannot take focus
+  const inp = document.querySelector('#tab-editor input[type=text]');
+  inp.focus();
+  inp.setSelectionRange(3, 3);
+  if (document.activeElement !== inp) return 'could not focus';
+  renderAll();
+  return document.activeElement === inp && inp.selectionStart === 3;
+});
+check('focus and caret survive a re-render', caretKept === true, String(caretKept));
+
+const scrollKept = await page.evaluate(() => {
+  showTab('validate');
+  const p = document.getElementById('tab-validate');
+  p.scrollTop = 40;
+  if (p.scrollTop === 0) return 'panel does not scroll';
+  renderAll();
+  return p.scrollTop === 40;
+});
+check('side-panel scroll position survives a re-render',
+  scrollKept === true || scrollKept === 'panel does not scroll', String(scrollKept));
+
+const chartScrollKept = await page.evaluate(() => {
+  const c = document.querySelector('#gantt .gantt-container');
+  c.scrollLeft = 120;
+  const before = c.scrollLeft;
+  document.querySelector('#gantt .bar-wrapper .bar').dispatchEvent(
+    new MouseEvent('click', { bubbles: true }));
+  const after = document.querySelector('#gantt .gantt-container').scrollLeft;
+  return { before, after };
+});
+check('clicking a bar does not reset the chart scroll',
+  chartScrollKept.after === chartScrollKept.before, JSON.stringify(chartScrollKept));
+
+/* A column name comes straight from the loaded file and used to be interpolated into
+ * innerHTML unescaped in the estimator-comparison row. Preact escapes by construction. */
+group('file content cannot inject markup');
+await boot();
+const inject = await page.evaluate(async () => {
+  const dt = new DataTransfer();
+  dt.items.add(new File([
+    'name,estimate,<img src=x onerror=window.__pwned=1> #\nAlpha,5,7\nBeta,5,19\n',
+  ], 'inject.csv', { type: 'text/csv' }));
+  window.dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true }));
+  await new Promise((r) => setTimeout(r, 400));
+  selectTask(window.App.doc.tasks[0].id, true);
+  await new Promise((r) => setTimeout(r, 200));
+  const cmp = document.querySelector('#tab-editor .est-cmp');
+  const cols = document.getElementById('tab-columns');
+  return {
+    pwned: !!window.__pwned,
+    imgs: document.querySelectorAll('#tab-editor img, #tab-columns img').length,
+    cmpText: cmp ? cmp.textContent : '',
+    colsText: cols ? cols.textContent : '',
+  };
+});
+check('a script-ish column name creates no element and runs nothing',
+  inject.pwned === false && inject.imgs === 0, JSON.stringify(inject).slice(0, 160));
+check('it is shown as literal text instead',
+  inject.cmpText.includes('<img') || inject.colsText.includes('<img'),
+  JSON.stringify({ cmp: inject.cmpText.slice(0, 60), cols: inject.colsText.slice(0, 60) }));
+
+/* ---------------------------------------------------------------- undo coverage */
+/* Propagation mode and team size used to mutate the doc without calling snapshot(), so
+ * they were silently not undoable. Everything now goes through commit(). */
+group('every edit is undoable');
+await boot('rigid');
+await page.click('#seg-mode button[data-mode="asap"]');
+await page.waitForTimeout(200);
+check('changing propagation mode takes effect',
+  (await page.evaluate(() => window.App.doc.mode)) === 'asap');
+await page.click('#btn-undo');
+await page.waitForTimeout(250);
+check('undo reverts a propagation mode change',
+  (await page.evaluate(() => window.App.doc.mode)) === 'rigid',
+  await page.evaluate(() => window.App.doc.mode));
+
+await boot();
+await page.fill('#team-size', '9');
+await page.dispatchEvent('#team-size', 'change');
+await page.waitForTimeout(200);
+check('changing team size takes effect',
+  (await page.evaluate(() => window.App.doc.teamSize)) === 9);
+await page.click('#btn-undo');
+await page.waitForTimeout(250);
+check('undo reverts a team size change',
+  (await page.evaluate(() => window.App.doc.teamSize)) === 4,
+  String(await page.evaluate(() => window.App.doc.teamSize)));
 
 /* ---------------------------------------------------------------- project start */
 group('moving the project start');
