@@ -147,7 +147,7 @@ const LoadPanel = ({ doc, cal, rows }) => html`
     ? doc.holidays.slice().sort().map((h) => html`
         <div class="kv" key=${h}>
           <span>${fmtNice(h)}</span>
-          <span style=${{ cursor: 'pointer', color: '#ff9aa2' }}
+          <span style=${{ cursor: 'pointer', color: 'var(--danger-fg)' }}
                 onClick=${() => commit(
                   () => { App.doc.holidays = App.doc.holidays.filter((x) => x !== h); },
                   { rebuildCal: true })}>remove</span>
@@ -171,7 +171,7 @@ const LoadPanel = ({ doc, cal, rows }) => html`
 
 /* ---------- column mapping ---------- */
 
-const ColumnsPanel = ({ doc, numCols, colors }) => {
+const ColumnsPanel = ({ doc, numCols, colors, overflow }) => {
   const extras = doc.extras.map((i) => doc.header[i]).filter((x) => x !== undefined);
   return html`
     <${GroupH}>Field mapping<//>
@@ -199,6 +199,12 @@ const ColumnsPanel = ({ doc, numCols, colors }) => {
       ${[...colors].map(([tag, col]) => html`
         <span key=${tag}><i style=${{ background: col }}></i>${tag || '(no tag)'}</span>`)}
     </div>
+    ${overflow > 0 ? html`
+      <${Hint}>
+        ${`${overflow} tag${overflow === 1 ? '' : 's'} past the eighth share the neutral colour. ` +
+          'Colours are never reused for two tags; the task name in the gutter is what ' +
+          'identifies a row.'}
+      <//>` : null}
   `;
 };
 

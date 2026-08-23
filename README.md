@@ -130,6 +130,19 @@ Saturday.
 Edits autosave to `localStorage`, so a refresh does not lose work; **Reset** returns to the
 bundled example. Undo/redo is <kbd>Cmd/Ctrl</kbd>+<kbd>Z</kbd>.
 
+## Appearance
+
+**Light**, **Dark** or **Auto** from the toolbar. Auto follows the operating system; an
+explicit choice overrides it and is remembered. The theme is a viewer preference, so it is
+not part of the plan: undo will not recolour the app and **Reset** leaves it alone.
+
+Tag colours are a validated categorical palette with separate light and dark values, each
+checked against its own surface for lightness, chroma, colourblind separation and contrast -
+so two tags never end up looking alike. Colours are assigned to tags in a fixed order and
+never reused: a ninth tag takes the neutral rather than repeating a hue. Identity does not
+rest on colour in any case, since the task name is always visible in the list beside the
+chart.
+
 ## Tests
 
 ```
@@ -212,7 +225,7 @@ state classes and tag colours are applied after render instead. Its built-in
 `move_dependencies` is a rigid visual drag that ignores working days, so it is switched off
 and all propagation is handled here.
 
-Two more things worth knowing:
+Three more things worth knowing:
 
 3. **Scheduling never does date arithmetic.** Positions are integer working-day indices from
    `src/calendar.js`, so weekends and holidays do not exist in the number line and a task
@@ -224,6 +237,12 @@ Two more things worth knowing:
    input focus, caret position and scroll offset, and escapes column names from the loaded
    file by construction. htm ships a prebuilt UMD bundle of preact + hooks + htm, so this
    costs one 13 kB vendored file and no build step.
+5. **A theme is a token swap and nothing else.** Every colour is a CSS custom property, and
+   CI fails on a literal anywhere in the stylesheet or in `src/`. Bars carry
+   `var(--series-N)` rather than a hex, so switching theme repaints the chart with no
+   re-render at all. Frappe ships its own dark values under the same `data-theme` attribute
+   this app sets, so every one of its tokens is pinned to ours — otherwise a token behaves
+   differently under an explicit dark choice than under OS-dark.
 
 Dependency-aware rescheduling is a paid feature in the obvious alternatives:
 [DHTMLX Gantt](https://docs.dhtmlx.com/gantt/guides/auto-scheduling)'s `auto_scheduling` is

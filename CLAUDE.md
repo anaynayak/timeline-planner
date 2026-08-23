@@ -79,9 +79,52 @@ analysis, weekly load, numeric columns and tag colours — and threads it into e
 renderer. Re-deriving any of that per task or per panel is what previously made a keystroke
 on a 300-task plan take over 100 ms.
 
+## Theming
+
+Light and dark. **Every colour is a token** declared in the three blocks at the top of
+`index.html`; there are no colour literals anywhere else, and CI fails on one in the
+stylesheet or in `src/`, and on a token present in one theme block but missing from
+another. A literal cannot respond to a theme switch, and that failure is invisible until
+somebody opens the other theme.
+
+- **Dark is declared twice on purpose** — once under `@media (prefers-color-scheme: dark)`
+  scoped to `:root:where(:not([data-theme="light"]))`, once under `:root[data-theme="dark"]`.
+  The toolbar toggle has to beat the OS setting in *both* directions: the `:not()` guard is
+  what lets an explicit Light choice win under OS-dark, and `:where()` keeps the media
+  block at specificity 0 so the explicit scopes always win. Auto stores nothing.
+- **An inline script in `<head>` stamps the saved theme before first paint.** The app
+  scripts load at the end of `<body>`; doing it there flashes the wrong theme.
+- **Tag colours are `var(--series-N)`, never a hex.** `tagColors()` returns custom-property
+  references, so the browser repaints every bar and dot on a theme change with no
+  re-render and no recomputation here. Don't "simplify" it to a hex lookup.
+- **The theme is not part of the plan.** It has its own `localStorage` key, so it stays out
+  of the undo stack (undo must not recolour the app) and survives Reset.
+
+### Changing a series colour
+
+The eight `--series-N` slots are a **validated palette, not a preference**. Light and dark
+are separately validated against their own surface — they are not one palette with a
+brightness flip. Do not hand-tweak a step. Re-run the validator and only ship values that
+pass:
+
+```
+node scripts/validate_palette.js "<hex,hex,…>" --mode dark  --surface "#0f1115"
+node scripts/validate_palette.js "<hex,hex,…>" --mode light --surface "#fcfcfb"
+```
+
+It checks the lightness band, a chroma floor, colourblind separation, a normal-vision
+floor and contrast. The palette this replaced failed four of those: its yellow and green
+sat at ΔE 14.1 for *normal* colour vision, i.e. two tags that plainly looked alike.
+
+Slots are assigned in fixed order and **never cycled**. A 9th tag takes `--series-none`
+rather than reusing a hue, because two tags sharing a colour is a worse lie than one tag
+having none — and the Columns legend says so when it happens. Identity never rests on
+colour anyway: the task name is always visible in the gutter. That is also the "relief"
+that licenses three light-mode slots sitting below 3:1 against the surface.
+
 ## Frappe Gantt gotchas
 
-These are load-bearing. All three were found the hard way:
+These are load-bearing. All four were found the hard way:
 
 1. **`ignore: ['weekend']` does not compress the axis.** It hatches non-working columns and
    keeps a calendar axis, so a 10-working-day bar would be 12 columns wide. Hence workday
@@ -94,8 +137,19 @@ These are load-bearing. All three were found the hard way:
    space-separated string throws and only one bar renders. State classes and tag colours are
    applied after render in `markBars()`.
 
+4. **frappe ships its own dark theme under `html[data-theme=dark]`** — the very attribute
+   our toggle sets. So any `--g-*` token we leave unset takes frappe's *dark* default when
+   the toggle says dark, but its *light* default under OS-dark with the toggle on Auto. That
+   split had `--g-weekend-highlight-color` flashing near-white on column hover in one dark
+   path and not the other. **Every** `--g-*` token is therefore pinned to one of ours in the
+   `.gantt-container` block, including ones this app never displays. Don't prune them.
+
 Also: built-in `move_dependencies` is a rigid *visual* drag that ignores working days, so it
 is off and all propagation is ours (`propagateRigid`, `asapAll`, `pullIntoLegality`).
+
+And note the in-bar labels are hidden. No single ink is legible on all eight light-mode
+slots (white fails on yellow and aqua, dark ink fails on blue and violet), frappe was
+already hiding the ones too long to fit, and the gutter shows every name anyway.
 
 ## Preact gotchas
 

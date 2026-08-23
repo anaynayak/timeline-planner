@@ -5,18 +5,116 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Timeline Planner</title>
 <link rel="stylesheet" href="vendor/frappe-gantt.css">
+<script>
+  /* Stamp the saved theme before first paint. Inline and in <head> on purpose: the app
+     scripts load at the end of <body>, so doing this there would flash the wrong theme.
+     "auto" stores nothing and leaves prefers-color-scheme in charge. */
+  try {
+    var t = localStorage.getItem('miro-timeline:theme');
+    if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+  } catch (e) { /* private mode - fall back to the OS preference */ }
+</script>
 <style>
+  /* ---------- theme tokens ----------
+     Every colour in this file and in src/ comes from a token below, so a theme is a
+     value swap and nothing else. Light is the base; dark is declared under BOTH a
+     prefers-color-scheme block and a [data-theme=dark] scope, so an explicit choice in
+     the toolbar wins over the OS setting in either direction. The :not() guard is what
+     lets a light stamp beat OS-dark; :where() keeps the media block's specificity at 0
+     so the explicit scopes always win.
+
+     --series-1..8 are the categorical tag slots. Both sets are validated for their own
+     surface (lightness band, chroma floor, colourblind separation, contrast) - they are
+     not one palette with a brightness flip. Do not hand-tweak a step: re-run the
+     validator. Slots are assigned in fixed order and never cycled; a 9th tag folds into
+     --series-none rather than inventing a hue. */
   :root {
-    --bg: #0f1115;
-    --panel: #171a21;
-    --panel-2: #1e222b;
-    --line: #2b303b;
-    --fg: #e6e9ef;
-    --fg-dim: #9aa3b2;
-    --accent: #4c8dff;
-    --warn: #d99b32;
-    --err: #e05561;
-    --ok: #4bb87c;
+    color-scheme: light;
+    --bg: #fcfcfb;
+    --panel: #f5f5f3;
+    --panel-2: #ffffff;
+    --panel-3: #ebebe7;          /* hover */
+    --line: #d9d9d4;
+    --line-strong: #bfbfb8;
+    --line-2: #ececE8;           /* subtle row rules */
+    --fg: #17171a;
+    --fg-dim: #52514e;
+    --accent: #2a78d6;
+    --on-accent: #ffffff;
+    --sel-bg: #dce9fa;
+    --drop-veil: rgba(252, 252, 251, .93);
+
+    /* status - reserved, never used as a series colour */
+    --warn: #a8690a;
+    --warn-bg: #fdf3e2;
+    --warn-fg: #7a4c05;
+    --err: #c0342f;
+    --err-bg: #fdecea;
+    --err-fg: #8f1f1b;
+    --ok: #157a4a;
+    --ok-bg: #e7f6ed;
+    --ok-fg: #0e5a36;
+    --danger-line: #e3b3b0;
+    --danger-fg: #b3211c;
+    --crit: #d5342f;
+    --crit-fg: #8c4a42;   /* muted: the critical path is emphasis, not an error */
+
+    /* chart chrome */
+    --row: #ffffff;
+    --row-line: #eeeeea;
+    --tick: #ececE8;
+    --tick-thick: #d5d5cf;
+    --arrow: #8c8c85;
+    --handle: #4a4a45;
+
+    /* categorical tag slots, validated for the light surface */
+    --series-none: #9aa0ab;
+    --series-1: #2a78d6;
+    --series-2: #eb6834;
+    --series-3: #1baf7a;
+    --series-4: #eda100;
+    --series-5: #e87ba4;
+    --series-6: #008300;
+    --series-7: #4a3aa7;
+    --series-8: #e34948;
+  }
+
+  /* the dark values, declared once and applied from two scopes */
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --bg: #0f1115; --panel: #171a21; --panel-2: #1e222b; --panel-3: #252a34;
+      --line: #2b303b; --line-strong: #3d444f; --line-2: #1b1f27;
+      --fg: #e6e9ef; --fg-dim: #9aa3b2; --accent: #4c8dff; --on-accent: #ffffff;
+      --sel-bg: #263041; --drop-veil: rgba(15, 17, 21, .92);
+      --warn: #d99b32; --warn-bg: #382c1a; --warn-fg: #f0bd6a;
+      --err: #e05561; --err-bg: #3a1f23; --err-fg: #ff8f98;
+      --ok: #4bb87c; --ok-bg: #1c3327; --ok-fg: #7fd6a3;
+      --danger-line: #5c2b30; --danger-fg: #ff9aa2;
+      --crit: #ff5f6d; --crit-fg: #ffc9cd;
+      --row: #14171d; --row-line: #21252e; --tick: #222731; --tick-thick: #333a47;
+      --arrow: #6b7484; --handle: #cfd6e4;
+      --series-none: #5b6270;
+      --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #c98500;
+      --series-5: #d55181; --series-6: #008300; --series-7: #9085e9; --series-8: #e66767;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #0f1115; --panel: #171a21; --panel-2: #1e222b; --panel-3: #252a34;
+    --line: #2b303b; --line-strong: #3d444f; --line-2: #1b1f27;
+    --fg: #e6e9ef; --fg-dim: #9aa3b2; --accent: #4c8dff; --on-accent: #ffffff;
+    --sel-bg: #263041; --drop-veil: rgba(15, 17, 21, .92);
+    --warn: #d99b32; --warn-bg: #382c1a; --warn-fg: #f0bd6a;
+    --err: #e05561; --err-bg: #3a1f23; --err-fg: #ff8f98;
+    --ok: #4bb87c; --ok-bg: #1c3327; --ok-fg: #7fd6a3;
+    --danger-line: #5c2b30; --danger-fg: #ff9aa2;
+    --crit: #ff5f6d; --crit-fg: #ffc9cd;
+    --row: #14171d; --row-line: #21252e; --tick: #222731; --tick-thick: #333a47;
+    --arrow: #6b7484; --handle: #cfd6e4;
+    --series-none: #5b6270;
+    --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #c98500;
+    --series-5: #d55181; --series-6: #008300; --series-7: #9085e9; --series-8: #e66767;
   }
   * { box-sizing: border-box; }
   html, body { height: 100%; margin: 0; }
@@ -30,10 +128,10 @@
     background: var(--panel-2); border: 1px solid var(--line); color: var(--fg);
     border-radius: 6px; padding: 5px 10px; cursor: pointer;
   }
-  button:hover:not(:disabled) { border-color: #3d444f; background: #252a34; }
+  button:hover:not(:disabled) { border-color: var(--line-strong); background: var(--panel-3); }
   button:disabled { opacity: .4; cursor: default; }
-  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-  button.danger { border-color: #5c2b30; color: #ff9aa2; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+  button.danger { border-color: var(--danger-line); color: var(--danger-fg); }
   input[type=text], input[type=number], input[type=date], textarea, select {
     background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px;
   }
@@ -51,16 +149,16 @@
   #toolbar .sep { width: 1px; height: 22px; background: var(--line); }
   .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
   .seg button { border: 0; border-radius: 0; padding: 5px 9px; background: transparent; }
-  .seg button.on { background: var(--accent); color: #fff; }
+  .seg button.on { background: var(--accent); color: var(--on-accent); }
   .brand { font-weight: 600; letter-spacing: .2px; margin-right: 4px; }
   .brand small { color: var(--fg-dim); font-weight: 400; }
   .credit { margin-left: auto; color: var(--fg-dim); font-size: 11px; }
   .credit a { color: var(--fg-dim); }
   .credit a:hover { color: var(--accent); }
   .badge { border-radius: 999px; padding: 1px 7px; font-size: 11px; font-weight: 600; }
-  .badge.err { background: #3a1f23; color: #ff8f98; }
-  .badge.warn { background: #382c1a; color: #f0bd6a; }
-  .badge.ok { background: #1c3327; color: #7fd6a3; }
+  .badge.err { background: var(--err-bg); color: var(--err-fg); }
+  .badge.warn { background: var(--warn-bg); color: var(--warn-fg); }
+  .badge.ok { background: var(--ok-bg); color: var(--ok-fg); }
 
   /* ---------- layout ---------- */
   #main { flex: 1 1 auto; display: flex; min-height: 0; }
@@ -76,17 +174,21 @@
             border-bottom: 1px solid var(--line); color: var(--fg-dim);
             font-size: 11px; text-transform: uppercase; letter-spacing: .6px; box-sizing: border-box; }
   .g-row { display: flex; align-items: center; gap: 6px; padding: 0 9px; cursor: pointer;
-           border-bottom: 1px solid #1b1f27; box-sizing: border-box; }
-  .g-row:hover { background: #222732; }
-  .g-row.sel { background: #263041; box-shadow: inset 2px 0 0 var(--accent); }
+           border-bottom: 1px solid var(--line-2); box-sizing: border-box; }
+  .g-row:hover { background: var(--panel-3); }
+  .g-row.sel { background: var(--sel-bg); box-shadow: inset 2px 0 0 var(--accent); }
   .g-row .nm { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .g-row .mt { flex: 0 0 auto; font-size: 11px; color: var(--fg-dim); font-variant-numeric: tabular-nums; }
-  .g-row.bad .mt { color: #f0bd6a; font-weight: 600; }
-  .g-row .dot { flex: 0 0 auto; width: 7px; height: 7px; border-radius: 2px; background: #454b58; }
-  .g-row.crit .nm { color: #ffc9cd; }
+  .g-row.bad .mt { color: var(--warn-fg); font-weight: 600; }
+  .g-row .dot { flex: 0 0 auto; width: 7px; height: 7px; border-radius: 2px; background: var(--series-none); }
+  .g-row.crit .nm { color: var(--crit-fg); }
 
-  /* the gutter carries the names, so drop the labels frappe pushes outside short bars */
-  .gantt .bar-label.big { display: none; }
+  /* The gutter carries every task name, so the label frappe draws inside the bar is a
+     duplicate - and an unreadable one in light mode: no single ink is legible on all eight
+     slots (white fails on yellow and aqua, dark fails on blue and violet). frappe already
+     hid the labels too long to fit, so half of them were missing anyway. Drop them all and
+     let the gutter be the label. */
+  .gantt .bar-label, .gantt .bar-label.big { display: none; }
   #side {
     flex: 0 0 340px; border-left: 1px solid var(--line); background: var(--panel);
     display: flex; flex-direction: column; min-height: 0;
@@ -118,7 +220,7 @@
   .row2 > * { flex: 1; }
   .picker { max-height: 160px; overflow: auto; border: 1px solid var(--line); border-radius: 6px; padding: 4px; background: var(--panel-2); }
   .picker label { display: flex; gap: 6px; align-items: flex-start; padding: 2px 3px; color: var(--fg); font-size: 12px; cursor: pointer; }
-  .picker label:hover { background: #252a34; }
+  .picker label:hover { background: var(--panel-3); }
   .picker input { margin-top: 3px; flex: 0 0 auto; }
   .hint { color: var(--fg-dim); font-size: 11px; margin-top: 3px; }
   .est-cmp { display: flex; gap: 10px; font-size: 12px; color: var(--fg-dim); }
@@ -127,7 +229,7 @@
   .colmap { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
   .colmap label { flex: 0 0 96px; font-size: 12px; }
   .colmap select { flex: 1 1 auto; min-width: 0; }
-  .colmap.unmapped label { color: #f0bd6a; }
+  .colmap.unmapped label { color: var(--warn-fg); }
   .legend { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
   .legend span { display: flex; align-items: center; gap: 5px; font-size: 12px; }
   .legend i { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
@@ -137,28 +239,42 @@
   table.load { width: 100%; border-collapse: collapse; font-size: 12px; }
   table.load th, table.load td { text-align: left; padding: 3px 6px; border-bottom: 1px solid var(--line); }
   table.load th { color: var(--fg-dim); font-weight: 500; }
-  table.load td.over { color: #ff9aa2; font-weight: 600; }
+  table.load td.over { color: var(--danger-fg); font-weight: 600; }
   .kv { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px solid var(--line); }
   .kv span:last-child { font-variant-numeric: tabular-nums; }
 
   /* ---------- gantt bar colours ---------- */
-  .gantt .bar-wrapper .bar { fill: #454b58; }
-  .gantt .bar-wrapper.critical .bar { stroke: #ff5f6d; stroke-width: 2px; }
+  .gantt .bar-wrapper .bar { fill: var(--series-none); }
+  .gantt .bar-wrapper.critical .bar { stroke: var(--crit); stroke-width: 2px; }
   .gantt .bar-wrapper.mismatch .bar { stroke: var(--warn); stroke-width: 2px; stroke-dasharray: 4 3; }
-  .gantt .bar-wrapper.selected .bar { stroke: #fff; stroke-width: 2px; }
-  .gantt .bar-wrapper .bar-label { fill: #fff; font-weight: 500; }
+  /* --fg, not --on-accent: the selection ring was white, which is invisible on a light
+     surface. Primary ink reads against the bar fill in both themes. */
+  .gantt .bar-wrapper.selected .bar { stroke: var(--fg); stroke-width: 2px; }
   .gantt .bar-progress { fill: transparent; }
-  .gantt-container { --g-bar-color: #454b58; --g-border-color: var(--line); --g-row-color: #14171d;
-    --g-row-border-color: #21252e; --g-header-background: var(--panel); --g-text-dark: var(--fg);
-    --g-text-light: #fff; --g-text-muted: var(--fg-dim); --g-tick-color: #222731;
-    --g-tick-color-thick: #333a47; --g-arrow-color: #6b7484; --g-handle-color: #cfd6e4;
+  /* EVERY frappe token is pinned to one of ours, including the ones this app never shows.
+     frappe ships its own dark values under `html[data-theme=dark]` - the same attribute the
+     theme toggle sets - so an unpinned token would take frappe's DARK default when the
+     toggle says dark but its LIGHT default under OS-dark with the toggle on Auto. That
+     split is how --g-weekend-highlight-color ends up flashing near-white on column hover
+     in one dark path and not the other. Pinning all of them makes the two paths identical. */
+  .gantt-container {
+    --g-bar-color: var(--series-none); --g-bar-border: var(--line);
+    --g-border-color: var(--line); --g-row-color: var(--row);
+    --g-row-border-color: var(--row-line); --g-header-background: var(--panel);
+    --g-text-dark: var(--fg); --g-text-light: var(--on-accent); --g-text-muted: var(--fg-dim);
+    --g-tick-color: var(--tick); --g-tick-color-thick: var(--tick-thick);
+    --g-arrow-color: var(--arrow); --g-handle-color: var(--handle);
+    --g-actions-background: var(--panel-2); --g-popup-actions: var(--panel-2);
+    --g-progress-color: var(--panel-3); --g-expected-progress: var(--panel-3);
+    --g-today-highlight: var(--accent);
+    --g-weekend-highlight-color: var(--panel-3); --g-weekend-label-color: var(--panel-3);
     background: var(--bg); }
   .gantt .lower-text, .gantt .upper-text { fill: var(--fg-dim); }
   .gantt .mon .lower-text { fill: var(--fg); }
 
   /* ---------- dropzone ---------- */
   #drop {
-    position: fixed; inset: 0; background: rgba(15,17,21,.92); z-index: 50;
+    position: fixed; inset: 0; background: var(--drop-veil); z-index: 50;
     display: none; align-items: center; justify-content: center; font-size: 18px; color: var(--fg);
     border: 3px dashed var(--accent);
   }
@@ -207,6 +323,15 @@
       <button data-zoom="Day" class="on">Day</button>
       <button data-zoom="Compact">Compact</button>
       <button data-zoom="Tiny">Tiny</button>
+    </div>
+  </div>
+
+  <div class="grp">
+    <label>Theme</label>
+    <div class="seg" id="seg-theme">
+      <button data-theme="light" title="Always light">Light</button>
+      <button data-theme="dark" title="Always dark">Dark</button>
+      <button data-theme="auto" title="Follow the operating system setting">Auto</button>
     </div>
   </div>
 

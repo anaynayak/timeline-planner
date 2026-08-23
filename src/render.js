@@ -100,15 +100,32 @@ function renderGutter(doc, an, colors) {
     rowH=${g.options.bar_height + g.options.padding} headH=${g.config.header_height} />`);
 }
 
-/* Tags are whatever the file happens to use, so colours are assigned from a palette
- * rather than hard-coded per stream. */
-const PALETTE = ['#4c8dff', '#29a19c', '#a06cd5', '#e0894f', '#d05c7c', '#5aa85a', '#c9a227', '#5f7fa8'];
+/* Tags are whatever the file happens to use, so a colour is assigned per tag rather than
+ * hard-coded per stream. These return `var(--series-N)` rather than a hex on purpose:
+ * the browser re-resolves the custom property when the theme changes, so switching
+ * light/dark repaints every bar and dot with no re-render and no recomputation here.
+ *
+ * Slots are assigned in fixed order and never cycled. The light and dark values of each
+ * slot are separately validated for their own surface, and that guarantee only holds for
+ * the first eight; a 9th tag takes the neutral rather than reusing a hue, because two
+ * tags sharing a colour is a worse lie than one tag having no colour. Identity never
+ * rests on colour anyway - the task name is always visible in the gutter. */
+const SERIES_SLOTS = 8;
+
 function tagColors(doc) {
   const tags = [...new Set(doc.tasks.map((t) => t.tags[0] || ''))].sort();
   const m = new Map();
-  tags.forEach((t, i) => m.set(t, t === '' ? '#5b6270' : PALETTE[i % PALETTE.length]));
+  let slot = 0;
+  for (const t of tags) {
+    if (t === '' || slot >= SERIES_SLOTS) { m.set(t, 'var(--series-none)'); continue; }
+    m.set(t, `var(--series-${++slot})`);
+  }
   return m;
 }
+
+/** Tags past the eighth share the neutral, so the legend has to say so. */
+const overflowTags = (doc) =>
+  [...new Set(doc.tasks.map((t) => t.tags[0] || ''))].filter(Boolean).length - SERIES_SLOTS;
 
 /** Apply the state classes and colours frappe cannot take via custom_class. */
 function markBars(doc, an, colors) {
@@ -205,7 +222,8 @@ function renderLoad(view) {
 function renderColumns(view) {
   const doc = App.doc;
   view = view || viewOf(doc, App.cal);
-  paintColumns(html`<${ColumnsPanel} doc=${doc} numCols=${view.numCols} colors=${view.colors} />`);
+  paintColumns(html`<${ColumnsPanel} doc=${doc} numCols=${view.numCols} colors=${view.colors}
+    overflow=${overflowTags(doc)} />`);
 }
 
 /** Point a canonical field at a different column and rebuild from the source rows. */
@@ -262,6 +280,7 @@ function renderToolbar() {
   document.getElementById('file-name').textContent = App.fileName;
   document.querySelectorAll('#seg-mode button').forEach((b) => b.classList.toggle('on', b.dataset.mode === doc.mode));
   document.querySelectorAll('#seg-zoom button').forEach((b) => b.classList.toggle('on', b.dataset.zoom === App.zoom));
+  document.querySelectorAll('#seg-theme button').forEach((b) => b.classList.toggle('on', b.dataset.theme === App.theme));
   document.getElementById('btn-undo').disabled = !App.undoStack.length;
   document.getElementById('btn-redo').disabled = !App.redoStack.length;
 }

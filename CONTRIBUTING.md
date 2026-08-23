@@ -124,6 +124,27 @@ Three invariants hold the design together:
   mutates, then re-renders. Hand-rolling `snapshot()` is how two edits ended up silently
   not undoable.
 
+## Colours
+
+Light and dark are supported, and **every colour is a token** declared in the three blocks
+at the top of `index.html`. Nothing else in the stylesheet or in `src/` may contain a colour
+literal - CI fails on one, and on a token defined in one theme block but missing from
+another. The reason is blunt: a hard-coded colour cannot respond to a theme switch, and you
+will not notice until you open the other theme.
+
+Adding a colour means adding a token to all three blocks. Reusing an existing semantic
+token is almost always better than inventing one.
+
+The eight `--series-N` tag slots are different: they are a **validated palette**, and light
+and dark are validated separately against their own surface rather than being one palette
+flipped. If you need to change one, re-run the validator (see "Changing a series colour" in
+`CLAUDE.md`) and ship only passing values. The set these replaced failed four checks,
+including a yellow/green pair that was hard to tell apart with *normal* colour vision.
+
+Theme behaviour is asserted in `test/browser.test.mjs` - the OS default, the toggle beating
+the OS in both directions, persistence, that it is not undoable, and that a bar repaints
+without a re-render.
+
 ## Style
 
 - Follow the surrounding code: two-space indent, semicolons, single quotes, `const` by

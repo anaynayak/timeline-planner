@@ -6,6 +6,27 @@
 'use strict';
 
 const LS_KEY = 'miro-timeline:doc';
+const LS_THEME = 'miro-timeline:theme';
+
+/* The theme is a viewer preference, not part of the plan, so it lives in its own key.
+ * That keeps it out of the undo stack (undo should not change your colours) and means
+ * Reset, which discards the document, leaves it alone. 'auto' stores nothing and defers
+ * to prefers-color-scheme; index.html re-applies the stored value before first paint. */
+function applyTheme(theme) {
+  App.theme = theme === 'light' || theme === 'dark' ? theme : 'auto';
+  if (App.theme === 'auto') delete document.documentElement.dataset.theme;
+  else document.documentElement.dataset.theme = App.theme;
+  try {
+    if (App.theme === 'auto') localStorage.removeItem(LS_THEME);
+    else localStorage.setItem(LS_THEME, App.theme);
+  } catch (e) { /* quota or private mode - the theme just will not persist */ }
+}
+
+function restoreTheme() {
+  let saved = null;
+  try { saved = localStorage.getItem(LS_THEME); } catch (e) { /* ignore */ }
+  App.theme = saved === 'light' || saved === 'dark' ? saved : 'auto';
+}
 
 const App = {
   doc: null,
@@ -14,6 +35,7 @@ const App = {
   fileName: 'plan.csv',
   selected: null,
   zoom: 'Day',
+  theme: 'auto',
   undoStack: [],
   redoStack: [],
   pendingDrag: null,

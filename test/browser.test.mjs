@@ -207,6 +207,76 @@ await page.waitForTimeout(250);
 check('undo restores the previous mapping',
   (await page.evaluate(() => window.App.doc.tasks.find((t) => t.id === 'survey').estimate)) === 5);
 
+/* ---------------------------------------------------------------- theming */
+/* Light and dark are a token swap. The explicit toggle must beat the OS setting in BOTH
+ * directions, which is what the :not()/:where() pair in the stylesheet is for. */
+group('light and dark');
+const tok = (name) => page.evaluate((n) =>
+  getComputedStyle(document.documentElement).getPropertyValue(n).trim(), name);
+const LIGHT_BG = '#fcfcfb', DARK_BG = '#0f1115';
+
+await page.emulateMedia({ colorScheme: 'light' });
+await boot();
+check('Auto follows an OS light preference', (await tok('--bg')) === LIGHT_BG, await tok('--bg'));
+await page.emulateMedia({ colorScheme: 'dark' });
+await page.waitForTimeout(150);
+check('Auto follows an OS dark preference with no reload',
+  (await tok('--bg')) === DARK_BG, await tok('--bg'));
+
+// OS says dark; ask for light explicitly
+await page.click('#seg-theme button[data-theme="light"]');
+await page.waitForTimeout(150);
+check('an explicit Light choice overrides OS dark', (await tok('--bg')) === LIGHT_BG, await tok('--bg'));
+// OS says light; ask for dark explicitly
+await page.emulateMedia({ colorScheme: 'light' });
+await page.click('#seg-theme button[data-theme="dark"]');
+await page.waitForTimeout(150);
+check('an explicit Dark choice overrides OS light', (await tok('--bg')) === DARK_BG, await tok('--bg'));
+
+check('the chosen theme is the one marked active in the toolbar',
+  (await page.locator('#seg-theme button.on').getAttribute('data-theme')) === 'dark');
+
+/* Bars carry var(--series-N), not a hex, so the browser repaints them on a token change.
+ * Nothing should have to re-render for a theme switch to take effect. */
+const darkFill = await page.evaluate(() =>
+  getComputedStyle(document.querySelector('#gantt .bar-wrapper .bar')).fill);
+await page.click('#seg-theme button[data-theme="light"]');
+await page.waitForTimeout(150);
+const lightFill = await page.evaluate(() =>
+  getComputedStyle(document.querySelector('#gantt .bar-wrapper .bar')).fill);
+check('a bar repaints to the other theme\'s series value without a re-render',
+  darkFill !== lightFill && /^rgb/.test(lightFill), `${darkFill} -> ${lightFill}`);
+
+check('the selection ring is visible ink, not white-on-white', await page.evaluate(() => {
+  selectTask(window.App.doc.tasks[0].id);
+  const bar = document.querySelector('#gantt .bar-wrapper.selected .bar');
+  return bar && getComputedStyle(bar).stroke !== 'rgb(255, 255, 255)';
+}));
+
+// the theme is a viewer preference: it survives a reload, and Reset must not clear it
+await page.reload({ waitUntil: 'load' });
+await page.waitForSelector('#gantt .bar-wrapper');
+check('the theme survives a reload', (await tok('--bg')) === LIGHT_BG, await tok('--bg'));
+await page.click('#btn-reset');
+await page.waitForTimeout(250);
+check('Reset discards the plan but keeps the theme', (await tok('--bg')) === LIGHT_BG, await tok('--bg'));
+
+/* Changing the theme must not enter the undo stack - undo should not recolour the app. */
+await page.evaluate(() => localStorage.clear());
+await page.reload({ waitUntil: 'load' });
+await page.waitForSelector('#gantt .bar-wrapper');
+const undoBefore = await page.evaluate(() => window.App.undoStack.length);
+await page.click('#seg-theme button[data-theme="dark"]');
+await page.waitForTimeout(150);
+check('changing the theme creates no undo entry',
+  (await page.evaluate(() => window.App.undoStack.length)) === undoBefore,
+  `${undoBefore} -> ${await page.evaluate(() => window.App.undoStack.length)}`);
+check('the theme is not stored on the plan document',
+  await page.evaluate(() => !('theme' in window.App.doc)));
+
+await page.emulateMedia({ colorScheme: 'dark' });
+await page.evaluate(() => localStorage.clear());
+
 /* ---------------------------------------------------------------- diffing panels */
 /* The panels are Preact components so a re-render diffs in place instead of tearing the
  * subtree down. That is what keeps input focus, caret position and scroll offsets. These

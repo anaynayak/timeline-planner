@@ -94,6 +94,45 @@ jobs:
           test "$fail" = 0 || exit 1
           echo "every module is wired up"
 
+      - name: Colours live in theme tokens only
+        run: |
+          # a hard-coded colour cannot respond to a theme switch, so every colour must be
+          # a token defined in the :root / [data-theme] blocks at the top of index.html
+          python3 - <<'PY'
+          import re, sys
+          fail = False
+          html = open('index.html', encoding='utf-8').read()
+          style = html.split('<style>', 1)[1].split('</style>', 1)[0]
+          # the token blocks end at the first plain selector
+          decls, rest = style.split('* { box-sizing: border-box; }', 1)
+          stray = sorted(set(re.findall(r'#[0-9a-fA-F]{3,8}\b|rgba?\([^)]*\)', rest)))
+          if stray:
+              print(f'::error::hard-coded colours in index.html CSS: {stray}')
+              fail = True
+          import glob
+          for f in sorted(glob.glob('src/*.js')):
+              src = open(f, encoding='utf-8').read()
+              hexes = sorted(set(re.findall(r'#[0-9a-fA-F]{3,8}\b', src)))
+              if hexes:
+                  print(f'::error::hard-coded colours in {f}: {hexes} - use var(--...) instead')
+                  fail = True
+          # both themes must define the same token set, or one theme silently inherits
+          names = [set(re.findall(r'(--[a-z0-9-]+):', b)) for b in
+                   re.findall(r'color-scheme:\s*\w+;(.*?)\n\s*\}', decls, re.S)]
+          if len(names) != 3:
+              print(f'::error::expected 3 theme blocks (light, media dark, attr dark), found {len(names)}')
+              fail = True
+          else:
+              base = names[0]
+              for i, n in enumerate(names[1:], 1):
+                  missing = base - n - {'color-scheme'}
+                  if missing:
+                      print(f'::error::theme block {i} is missing tokens: {sorted(missing)}')
+                      fail = True
+          print('colour tokens ok' if not fail else 'colour token check FAILED')
+          sys.exit(1 if fail else 0)
+          PY
+
       - name: App makes no network requests
         run: |
           # the tool must work offline; nothing may be pulled from a CDN.

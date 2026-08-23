@@ -62,6 +62,12 @@ function wireUI() {
   document.querySelectorAll('#seg-zoom button').forEach((b) => {
     b.onclick = () => { App.zoom = b.dataset.zoom; renderAll(); };
   });
+  /* Not routed through commit(): the theme is not part of the plan, so it must not enter
+   * the undo stack. Nothing needs re-rendering either - the bars and dots are painted
+   * with var(--series-N), so the browser repaints them when the tokens change. */
+  document.querySelectorAll('#seg-theme button').forEach((b) => {
+    b.onclick = () => { applyTheme(b.dataset.theme); renderToolbar(); };
+  });
   document.getElementById('team-size').onchange = (e) => {
     const n = Math.max(1, Number(e.target.value) || 1);
     if (n === App.doc.teamSize) return;   // don't spend an undo entry on a no-op
@@ -197,6 +203,7 @@ function readFile(f) {
 window.addEventListener('DOMContentLoaded', () => {
   if (location.hash === '#selftest') { renderSelftest(); return; }
   wireUI();
+  restoreTheme();   // index.html already stamped the attribute; this syncs App.theme
   const saved = restore();
   if (saved && saved.doc && saved.doc.tasks) {
     App.doc = saved.doc;
