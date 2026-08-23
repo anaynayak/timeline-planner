@@ -140,7 +140,7 @@ function wireUI() {
     }
   };
   // driver.js handles its own overlay, keyboard and dismissal; we only own "seen" state
-  document.getElementById('btn-help').onclick = () => startTour();
+  document.getElementById('btn-help').onclick = () => { startTour(); renderToolbar(); };
 
   document.getElementById('btn-reset').onclick = () => {
     localStorage.removeItem(LS_KEY);
@@ -207,6 +207,7 @@ window.addEventListener('DOMContentLoaded', () => {
   if (location.hash === '#selftest') { renderSelftest(); return; }
   wireUI();
   restoreTheme();   // index.html already stamped the attribute; this syncs App.theme
+  restoreTour();
   const saved = restore();
   if (saved && saved.doc && saved.doc.tasks) {
     App.doc = saved.doc;
@@ -217,8 +218,7 @@ window.addEventListener('DOMContentLoaded', () => {
   } else {
     loadDoc(document.getElementById('sample-csv').textContent, EXAMPLE_NAME, true);
   }
-  /* First visit only. Deferred a frame: driver.js measures the element it highlights, and
-   * on the very first paint the chart has not been laid out yet, so step 4 would get a
-   * zero-sized box. Marked seen when it ends, however it ends. */
-  if (!introSeen()) requestAnimationFrame(() => startTour());
+  /* The tour is opt-in - nothing opens by itself. renderToolbar() has already made the
+   * button say "Take the tour" and pulse if this is a first visit. */
+  renderToolbar();
 });

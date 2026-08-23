@@ -26,10 +26,12 @@ modules, no bundler — so it works straight from `file://`. Everything happens 
 and **nothing is sent over the network**: both libraries are vendored locally rather than
 pulled from a CDN.
 
-On a first visit a short guided tour points at the parts that are not guessable — the
-working-day axis, dragging a bar, and the duration-versus-estimate column. Reopen it any
-time with **?** in the toolbar. The plan you land on is a synthetic example and is labelled
-as such, so it is never mistaken for your own data.
+A short guided tour points at the parts that are not guessable — the working-day axis,
+dragging a bar, and the duration-versus-estimate column. It is **opt-in**: nothing
+interrupts you on arrival. Until you have taken it the toolbar button reads **Take the
+tour** and pulses gently; afterwards it becomes a quiet **?** you can use any time. The plan
+you land on is a synthetic example and is labelled as such, so it is never mistaken for your
+own data.
 
 Drop a `.csv` or `.tsv` on the window to load it, or use **Open file**. Two synthetic
 examples are in [`examples/`](examples):

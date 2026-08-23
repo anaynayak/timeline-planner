@@ -29,12 +29,16 @@ function applyTheme(theme) {
   } catch (e) { /* quota or private mode - the theme just will not persist */ }
 }
 
-/** Has the viewer been shown the intro? Stored separately so Reset does not re-trigger it. */
+/* Has the viewer taken the tour? Its own key, so Reset - which discards the document -
+ * does not start nagging again. Mirrored onto App.tourSeen because renderToolbar decides
+ * how prominent the tour button is, and it should not hit localStorage on every render. */
 function introSeen() {
   try { return localStorage.getItem(LS_SEEN) === '1'; } catch (e) { return true; }
 }
+function restoreTour() { App.tourSeen = introSeen(); }
 function markIntroSeen() {
-  try { localStorage.setItem(LS_SEEN, '1'); } catch (e) { /* private mode - shown again */ }
+  App.tourSeen = true;
+  try { localStorage.setItem(LS_SEEN, '1'); } catch (e) { /* private mode - offered again */ }
 }
 
 function restoreTheme() {
@@ -52,6 +56,7 @@ const App = {
   zoom: 'Day',
   theme: 'auto',
   isExample: false,
+  tourSeen: true,   // assume seen until restoreTour() says otherwise
   undoStack: [],
   redoStack: [],
   pendingDrag: null,

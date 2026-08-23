@@ -45,6 +45,7 @@
     --sel-bg: #dce9fa;
     --drop-veil: rgba(252, 252, 251, .93);
     --shadow: rgba(23, 23, 26, .18);
+    --accent-ring: rgba(42, 120, 214, .28);
 
     /* status - reserved, never used as a series colour */
     --warn: #a8690a;
@@ -90,6 +91,7 @@
       --fg: #e6e9ef; --fg-dim: #9aa3b2; --accent: #4c8dff; --on-accent: #ffffff;
       --sel-bg: #263041; --drop-veil: rgba(15, 17, 21, .92);
       --shadow: rgba(0, 0, 0, .45);
+      --accent-ring: rgba(76, 141, 255, .34);
       --warn: #d99b32; --warn-bg: #382c1a; --warn-fg: #f0bd6a;
       --err: #e05561; --err-bg: #3a1f23; --err-fg: #ff8f98;
       --ok: #4bb87c; --ok-bg: #1c3327; --ok-fg: #7fd6a3;
@@ -109,6 +111,7 @@
     --fg: #e6e9ef; --fg-dim: #9aa3b2; --accent: #4c8dff; --on-accent: #ffffff;
     --sel-bg: #263041; --drop-veil: rgba(15, 17, 21, .92);
     --shadow: rgba(0, 0, 0, .45);
+    --accent-ring: rgba(76, 141, 255, .34);
     --warn: #d99b32; --warn-bg: #382c1a; --warn-fg: #f0bd6a;
     --err: #e05561; --err-bg: #3a1f23; --err-fg: #ff8f98;
     --ok: #4bb87c; --ok-bg: #1c3327; --ok-fg: #7fd6a3;
@@ -280,6 +283,22 @@
   .gantt .lower-text, .gantt .upper-text { fill: var(--fg-dim); }
   .gantt .mon .lower-text { fill: var(--fg); }
 
+  /* Until the tour has been taken, its button announces itself with a slow accent ring.
+     Finite would stop inviting anyone who looks up ten seconds later, so it loops - but
+     gently, and it disappears for good once taken. Motion is opt-out: a reduced-motion
+     preference keeps the accent border and drops the animation. */
+  #btn-help.invite { border-color: var(--accent); color: var(--accent); font-weight: 600;
+    animation: invite-pulse 2.4s ease-in-out infinite; }
+  /* a token rather than color-mix(): the ring is a colour like any other, and color-mix is
+     new enough that a browser without it would silently drop the whole declaration */
+  @keyframes invite-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 transparent; }
+    50%      { box-shadow: 0 0 0 4px var(--accent-ring); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    #btn-help.invite { animation: none; }
+  }
+
   /* ---------- guided tour (driver.js) ----------
      driver.css hard-codes its colours and exposes no custom properties for them, so its
      popover is re-skinned here against our tokens. Without this the tour is a white card
@@ -383,7 +402,7 @@
     <button id="btn-download">Download CSV</button>
     <button id="btn-copy" title="Tab separated, so it pastes straight into spreadsheet cells">Copy for Excel</button>
     <button id="btn-reset" title="Discard local edits and reload the bundled file">Reset</button>
-    <button id="btn-help" title="Take the tour again (shown automatically on a first visit)">?</button>
+    <button id="btn-help">?</button>
     <input type="file" id="file-input" accept=".csv,.tsv,.txt" hidden>
   </div>
   <div class="grp credit">

@@ -163,6 +163,12 @@ The first-run tour is driver.js (global `driver.js.driver`). Two things bit:
    have to call `destroy()` yourself and guard the recursion that causes. So the tour is
    marked seen **when it starts**, which is better behaviour anyway — somebody who opens it
    and immediately closes it has been offered it.
+
+   The tour is **opt-in**: nothing opens by itself. Until it has been taken, the toolbar
+   button reads "Take the tour" and pulses; afterwards it shrinks to a quiet `?`. That state
+   lives on `App.tourSeen`, mirrored from its own `localStorage` key so `renderToolbar()`
+   does not hit storage every render, and so Reset does not start nagging again. The pulse
+   honours `prefers-reduced-motion`.
 2. **It adds `.driver-active-element` but never removes it from the previous target.** That
    class is what grants `pointer-events: auto`, so without cleanup every element the tour
    has visited stays clickable behind the overlay — six of them by the last step. A single

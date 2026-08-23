@@ -286,6 +286,12 @@ function renderToolbar() {
   document.querySelectorAll('#seg-mode button').forEach((b) => b.classList.toggle('on', b.dataset.mode === doc.mode));
   document.querySelectorAll('#seg-zoom button').forEach((b) => b.classList.toggle('on', b.dataset.zoom === App.zoom));
   document.querySelectorAll('#seg-theme button').forEach((b) => b.classList.toggle('on', b.dataset.theme === App.theme));
+  /* The tour is opt-in. Until it has been taken the button says so and pulses; afterwards
+   * it shrinks to a quiet "?" so it stops competing with the actual controls. */
+  const help = document.getElementById('btn-help');
+  help.textContent = App.tourSeen ? '?' : 'Take the tour';
+  help.classList.toggle('invite', !App.tourSeen);
+  help.title = App.tourSeen ? 'Take the tour' : 'New here? A short guided tour of the chart';
   document.getElementById('btn-undo').disabled = !App.undoStack.length;
   document.getElementById('btn-redo').disabled = !App.redoStack.length;
 }

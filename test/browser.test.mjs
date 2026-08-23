@@ -32,16 +32,12 @@ const errors = [];
 page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 page.on('pageerror', (e) => errors.push('PAGEERROR ' + e.message));
 
-/* Reset to the bundled example. localStorage.clear() also drops the "tour seen" flag, so
- * the flag is re-stamped before the reload - otherwise the first-run tour opens here and
- * its overlay swallows every click for the rest of the suite. The tour group below clears
- * the flag deliberately. */
+/* Reset to the bundled example. Safe to wipe the "tour seen" flag along with everything
+ * else: the tour is opt-in, so an unseen flag only changes how the button looks. It used to
+ * matter, because an auto-opening tour put an overlay over every later click. */
 const boot = async (mode) => {
   await page.goto(APP, { waitUntil: 'load' });
-  await page.evaluate(() => {
-    localStorage.clear();
-    localStorage.setItem('miro-timeline:seen-intro', '1');
-  });
+  await page.evaluate(() => localStorage.clear());
   await page.reload({ waitUntil: 'load' });
   await page.waitForSelector('#gantt .bar-wrapper');
   await page.evaluate(() => window.__asap());
@@ -223,8 +219,27 @@ await page.goto(APP, { waitUntil: 'load' });
 await page.evaluate(() => localStorage.clear());
 await page.reload({ waitUntil: 'load' });
 await page.waitForSelector('#gantt .bar-wrapper');
+await page.waitForTimeout(500);
+/* Opt-in: nothing opens by itself. The button carries the invitation instead, so a first
+ * visit is never interrupted, and someone who does not want a tour never sees an overlay. */
+check('nothing opens by itself on a first visit',
+  (await page.locator('.driver-popover').count()) === 0);
+check('the tour button invites a first-time visitor',
+  /take the tour/i.test(await page.locator('#btn-help').innerText())
+  && (await page.locator('#btn-help').getAttribute('class') || '').includes('invite'),
+  await page.locator('#btn-help').innerText());
+check('the invitation animates',
+  (await page.evaluate(() => getComputedStyle(document.getElementById('btn-help')).animationName)) !== 'none');
+
+await page.emulateMedia({ reducedMotion: 'reduce' });
+check('a reduced-motion preference drops the animation but keeps the accent',
+  (await page.evaluate(() => getComputedStyle(document.getElementById('btn-help')).animationName)) === 'none'
+  && (await page.locator('#btn-help').getAttribute('class') || '').includes('invite'));
+await page.emulateMedia({ reducedMotion: null });
+
+await page.click('#btn-help');
 await page.waitForSelector('.driver-popover', { timeout: 5000 });
-check('the tour starts on a first visit', (await page.locator('.driver-popover').count()) === 1);
+check('the button starts the tour', (await page.locator('.driver-popover').count()) === 1);
 
 check('the bundled plan is labelled as an example, not as your file',
   (await page.locator('#file-name').getAttribute('class') || '').includes('example')
@@ -270,14 +285,20 @@ check('finishing removes the popover', (await page.locator('.driver-popover').co
 check('finishing leaves no element marked active',
   (await page.evaluate(() => document.querySelectorAll('.driver-active-element').length)) === 0);
 
+check('taking the tour quiets the button',
+  (await page.locator('#btn-help').innerText()).trim() === '?'
+  && !(await page.locator('#btn-help').getAttribute('class') || '').includes('invite'),
+  await page.locator('#btn-help').innerText());
+
 await page.reload({ waitUntil: 'load' });
 await page.waitForSelector('#gantt .bar-wrapper');
 await page.waitForTimeout(400);
-check('the tour does not run again on the next visit',
-  (await page.locator('.driver-popover').count()) === 0);
+check('it stays quiet on the next visit',
+  (await page.locator('#btn-help').innerText()).trim() === '?'
+  && (await page.locator('.driver-popover').count()) === 0);
 await page.click('#btn-help');
 await page.waitForTimeout(300);
-check('the ? button restarts it', (await page.locator('.driver-popover').count()) === 1);
+check('the ? button still restarts it', (await page.locator('.driver-popover').count()) === 1);
 await page.keyboard.press('Escape');
 await page.waitForTimeout(300);
 check('Escape leaves the tour', (await page.locator('.driver-popover').count()) === 0);
