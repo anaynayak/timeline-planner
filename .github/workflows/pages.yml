@@ -3,20 +3,17 @@ name: Deploy to GitHub Pages
 # The app is already a static site, so "building" is just uploading the repo with the
 # test scaffolding stripped out.
 #
-# This is manual-only on purpose. Publishing needs Pages turned on for the repository,
-# and until it is every push would fail this workflow for no useful reason. To publish:
+# Deploys on every push to main, plus on demand.
 #
-#   1. Settings -> Pages -> Source: GitHub Actions   (or rely on `enablement: true` below)
-#   2. Actions -> Deploy to GitHub Pages -> Run workflow
-#   3. once that succeeds, add the `push` trigger below to publish on every merge:
-#
-#        push:
-#          branches: [main]
-#
-# Note: Pages for a private repository requires a paid GitHub plan. On the free plan
-# either make the repository public or just run the tool locally (`open index.html`).
+# This must be the Pages source ("Settings -> Pages -> Source: GitHub Actions"). The
+# alternative, "Deploy from a branch", serves the repository root verbatim - which works,
+# but skips the assembly below and so publishes src/testhooks.js, putting window.App and
+# the __* helpers on the public site. Those exist only so test/browser.test.mjs can drive
+# the app; nothing in the app reads them.
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
