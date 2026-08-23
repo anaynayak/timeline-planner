@@ -53,10 +53,19 @@ jobs:
       - name: Assemble the site
         run: |
           mkdir -p _site
-          cp index.html app.js LICENSE NOTICE _site/
-          cp -r vendor examples _site/
+          cp index.html LICENSE NOTICE _site/
+          cp -r src vendor examples _site/
+          # testhooks.js only exists to let test/browser.test.mjs drive the app; the app
+          # itself never reads it, so a deploy can drop it. Its <script> tag is removed
+          # rather than left dangling.
+          rm -f _site/src/testhooks.js
+          sed -i 's|<script src="src/testhooks.js"></script>||' _site/index.html
           # Pages would otherwise run the upload through Jekyll
           touch _site/.nojekyll
+          # fail loudly rather than publishing a page with a dangling script tag
+          for f in $(grep -oE 'src="(src|vendor)/[^"]+"' _site/index.html | sed 's/src="//;s/"//'); do
+            test -f "_site/$f" || { echo "::error::_site/$f missing"; exit 1; }
+          done
           ls -R _site
 
       - uses: actions/configure-pages@v5

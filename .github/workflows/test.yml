@@ -65,15 +65,41 @@ jobs:
       - name: Vendored licence and attribution are present
         run: |
           test -f NOTICE || { echo "::error::NOTICE is missing"; exit 1; }
-          test -f vendor/frappe-gantt.LICENSE.txt || { echo "::error::vendored licence missing"; exit 1; }
-          grep -q 'frappe/gantt' NOTICE || { echo "::error::NOTICE does not credit Frappe Gantt"; exit 1; }
-          grep -q 'frappe/gantt' index.html || { echo "::error::UI does not credit Frappe Gantt"; exit 1; }
+          fail=0
+          # every vendored bundle needs its licence text on disk and a credit in NOTICE
+          for want in frappe-gantt.LICENSE.txt preact.LICENSE.txt htm.LICENSE.txt; do
+            test -f "vendor/$want" || { echo "::error::vendor/$want is missing"; fail=1; }
+          done
+          for want in 'frappe/gantt' 'preactjs/preact' 'developit/htm'; do
+            grep -q "$want" NOTICE || { echo "::error::NOTICE does not credit $want"; fail=1; }
+          done
+          for want in 'frappe/gantt' 'preactjs.com' 'developit/htm'; do
+            grep -q "$want" index.html || { echo "::error::UI does not credit $want"; fail=1; }
+          done
+          test "$fail" = 0 || exit 1
           echo "attribution ok"
+
+      - name: Every src module is loaded by index.html
+        run: |
+          # the app is ordered classic scripts, so a new file in src/ that nobody adds a
+          # <script> tag for is dead code that still passes the logic suite
+          fail=0
+          for f in src/*.js; do
+            grep -q "src=\"$f\"" index.html || { echo "::error::$f has no <script> tag in index.html"; fail=1; }
+          done
+          # and a tag pointing at a file that no longer exists breaks the page outright
+          grep -oE 'src="src/[^"]+\.js"' index.html | sed 's/src="//;s/"//' | while read -r f; do
+            test -f "$f" || { echo "::error::index.html loads $f, which does not exist"; exit 1; }
+          done
+          test "$fail" = 0 || exit 1
+          echo "every module is wired up"
 
       - name: App makes no network requests
         run: |
-          # the tool must work offline; nothing may be pulled from a CDN
-          if grep -nE 'https?://[^"'"'"' ]*\.(js|css)' index.html app.js ; then
+          # the tool must work offline; nothing may be pulled from a CDN.
+          # w3.org/2000/svg is the SVG XML namespace - an identifier, not a fetch.
+          if grep -nrE 'https?://[^"'"'"' ]*\.(js|css)' index.html src/ vendor/ \
+               | grep -v 'w3\.org' ; then
             echo "::error::remote script or stylesheet referenced - vendor it instead"
             exit 1
           fi
