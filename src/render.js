@@ -80,18 +80,18 @@ function commitDrag() {
   const oldS = startIdx(cal, t);
   const oldE = oldS + t.duration - 1;
   if (pd.s === oldS && pd.e === oldE) return;
-  const clamped = commit(() => {
+  commit(() => {
     t.duration = Math.max(1, pd.e - pd.s + 1);
-    // frappe will happily drop a bar before its predecessor finishes, so clamp the
-    // landing position to the earliest legal start rather than accept an illegal plan
-    const floor = earliest(App.doc, cal, t, 0);
-    const newS = Math.max(0, pd.s, floor);
+    // A drop before a predecessor finishes is allowed on purpose - that is a deliberate
+    // overlap (e.g. starting once a predecessor is only partway done), not a mistake to
+    // snap back. It can leave the plan illegal, but validate() already has a finding for
+    // exactly that (dep-violation, with a "Reflow ASAP" fix) - so the warning shows up
+    // there instead of the drop being silently corrected.
+    const newS = Math.max(0, pd.s);
     t.start = cal.at(newS);
     t.pinned = true;
     reschedule(App.doc, cal, t.id, newS + t.duration - 1 - oldE);
-    return newS !== pd.s;
   });
-  if (clamped) toast('Clamped: cannot start before its dependencies finish');
 }
 
 /** Task-name gutter. The rows are drawn by the Gutter component; the only thing that has

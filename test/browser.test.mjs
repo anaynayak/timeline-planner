@@ -1008,10 +1008,21 @@ check('the drag is honoured as a pin', aa.joinery > 0);
 check('downstream is pulled to the earliest legal start',
   aa.espresso === aa.joinery + jd, `${aa.espresso} vs ${aa.joinery + jd}`);
 
+/* Overlapping a predecessor on purpose is a real scenario (start once it is only partway
+ * done), not a mistake to snap back - so a drag that lands before a dependency finishes now
+ * sticks where dropped, and the resulting illegality is surfaced by validate()'s existing
+ * dep-violation finding rather than silently corrected. */
 group('dragging backwards past a predecessor');
 await boot('rigid');
+before = await idxAll();
 await drag('espresso', -25);
-check('the landing position is clamped rather than left illegal', (await violations()) === 0);
+after = await idxAll();
+const joineryEnd = after.joinery + (await durOf('joinery')) - 1;
+check('the drop is not clamped back to the legal floor',
+  after.espresso < before.espresso, `moved ${after.espresso - before.espresso}d`);
+check('the drop actually overlaps its predecessor - a genuine violation, not a no-op',
+  after.espresso <= joineryEnd, `espresso starts ${after.espresso}, joinery ends ${joineryEnd}`);
+check('the resulting dependency violation is surfaced, not hidden', (await violations()) > 0);
 
 /* ---------------------------------------------------------------- resize */
 group('resizing a bar');
