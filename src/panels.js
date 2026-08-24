@@ -40,12 +40,17 @@ const GutterRow = ({ t, rowH, selected, critical, colors }) => {
   const metricTitle = missing ? 'No estimate'
     : mismatch ? `Drawn ${t.duration} days, estimate ${t.estimate} days`
     : 'Duration matches estimate';
+  const nameTitle = [
+    t.name.trim(),
+    critical && 'On the critical path: zero float, so a delay here delays the whole plan.',
+    t.description,
+  ].filter(Boolean).join('\n\n');
   return html`
     <div class=${cls} style=${{ height: rowH + 'px' }}
          onClick=${() => selectTask(t.id, true)}>
       <span class="dot" style=${{ background: colors.get(t.tags[0] || '') }}
             title=${t.tags.join(', ') || 'no tag'}></span>
-      <span class="nm" title=${t.name.trim() + (t.description ? '\n\n' + t.description : '')}>
+      <span class="nm" title=${nameTitle}>
         ${t.name.trim()}
       </span>
       <span class="mt" title=${metricTitle}>${metric}</span>

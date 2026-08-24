@@ -160,6 +160,56 @@ check('no console errors (a multi-token custom_class used to throw here)',
 check('dependency arrows are drawn', (await page.locator('#gantt .arrow path').count()) >= 15,
   String(await page.locator('#gantt .arrow path').count()));
 
+/* ---------------------------------------------------------------- bar popup */
+group('bar popup');
+/* popup_on: "click" (the default) is wired to a "mouseup" listener on the bar-wrapper
+ * group in vendor frappe-gantt, not a "click" listener - a synthetic "click" event never
+ * reaches it. */
+const clickBar = async (id) => {
+  await page.locator(`#gantt .bar-wrapper[data-id="${id}"] .bar`).scrollIntoViewIfNeeded();
+  await page.evaluate((i) => document.querySelector(`#gantt .bar-wrapper[data-id="${i}"] .bar`)
+    .dispatchEvent(new MouseEvent('mouseup', { bubbles: true })), id);
+  await page.waitForTimeout(200);
+};
+await clickBar('soft');
+const details = await page.evaluate(() => document.querySelector('#gantt .popup-wrapper .details').innerHTML);
+check('the popup shows the task description',
+  details.includes('Friends and family, invited press.'), details);
+/* set_details is `this.details.innerHTML = a` in vendor frappe-gantt - a description is
+ * user-authored text, not markup, so it has to be escaped or it is an HTML/script
+ * injection point the moment someone opens a plan with a hostile description. */
+await page.evaluate(() => {
+  window.App.doc.tasks.find((t) => t.id === 'soft').description = '<img src=x onerror="window.__xss=1">';
+  window.__resched('soft', 0);
+});
+await clickBar('soft');
+const hostileDetails = await page.evaluate(() =>
+  document.querySelector('#gantt .popup-wrapper .details').innerHTML);
+check('a description with markup is escaped, not injected',
+  hostileDetails.includes('&lt;img') && !hostileDetails.includes('<img'), hostileDetails);
+check('an escaped description does not execute', (await page.evaluate(() => window.__xss)) === undefined);
+
+/* ---------------------------------------------------------------- critical path tooltip */
+/* The gutter name turns red for a critical-path task (zero float), but nothing explained
+ * why until the tooltip carried the reason too - it used to only ever show the task name
+ * and description. */
+group('critical path explains itself in the gutter tooltip');
+await boot();
+const critInfo = await page.evaluate(() => {
+  const an = window.__analyse();
+  const ids = window.App.doc.tasks.map((t) => t.id);
+  return { critIdx: ids.findIndex((id) => an.float.get(id) === 0),
+           slackIdx: ids.findIndex((id) => an.float.get(id) !== 0) };
+});
+check('the bundled example has both a critical and a non-critical task',
+  critInfo.critIdx >= 0 && critInfo.slackIdx >= 0, JSON.stringify(critInfo));
+const critTitle = await page.locator('#gutter .g-row .nm').nth(critInfo.critIdx).getAttribute('title');
+check('a critical-path task\'s name tooltip mentions the critical path',
+  critTitle.includes('critical path'), critTitle);
+const slackTitle = await page.locator('#gutter .g-row .nm').nth(critInfo.slackIdx).getAttribute('title');
+check('a task with slack does not get the critical-path note',
+  !slackTitle.includes('critical path'), slackTitle);
+
 /* ---------------------------------------------------------------- geometry */
 group('geometry: one column is one working day');
 const geom = await page.evaluate(() => {
@@ -779,6 +829,28 @@ check('the shift carries all the way to the last task',
 check('an unrelated branch does not move', after.menu === before.menu);
 check('a move does not change the duration', (await durOf('joinery')) === 15, String(await durOf('joinery')));
 check('no dependency violations afterwards', (await violations()) === 0);
+
+/* on_date_change used to arm a 150ms auto-commit timer as a fallback, but firing it while
+ * the mouse button was still down re-rendered mid-gesture (the very tear-down the deferred
+ * commit was meant to avoid) and silently dropped every pixel moved after the pause - so a
+ * slow multi-day drag landed short and had to be finished with a second drag. */
+group('dragging a bar with a mid-gesture pause');
+await boot('rigid');
+const b2 = await idxAll();
+await page.locator(`#gantt .bar-wrapper[data-id="joinery"] .bar`).scrollIntoViewIfNeeded();
+await centreOn('joinery');
+await page.waitForTimeout(200);
+const g2 = await geoOf('joinery');
+await page.mouse.move(g2.cx, g2.cy);
+await page.mouse.down();
+await page.mouse.move(g2.cx + 4 * g2.cw, g2.cy, { steps: 10 });
+await page.waitForTimeout(400);   // longer than the old 150ms debounce, mouse still down
+await page.mouse.move(g2.cx + 8 * g2.cw, g2.cy, { steps: 10 });
+await page.mouse.up();
+await page.waitForTimeout(400);
+const a2 = await idxAll();
+check('a pause mid-drag does not truncate the gesture',
+  a2.joinery - b2.joinery === 8, `moved ${a2.joinery - b2.joinery}d`);
 
 group('dragging a bar (ASAP)');
 await boot('asap');

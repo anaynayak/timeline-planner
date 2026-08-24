@@ -11,6 +11,11 @@
  */
 'use strict';
 
+/** frappe's popup sets innerHTML directly (`set_details: a => this.details.innerHTML =
+ *  a`), so any task text going into it - unlike htm, which escapes by construction - has
+ *  to be escaped here or a description becomes an HTML/script injection point. */
+const escapeHtml = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+
 function viewModes(cal) {
   const realOf = (d) => {
     const i = synthIdx(d);
@@ -66,7 +71,6 @@ function ganttTasks(doc, cal) {
 
 /** Apply a drag or resize once the gesture has finished. */
 function commitDrag() {
-  clearTimeout(App.dragTimer);
   const pd = App.pendingDrag;
   App.pendingDrag = null;
   if (!pd) return;
@@ -177,7 +181,8 @@ function renderGantt(view) {
         `${fmtNice(cal.at(s))} &rarr; ${fmtNice(cal.at(s + t.duration - 1))}<br>` +
         `${t.duration} working days` +
         (t.estimate != null ? ` &middot; estimate ${t.estimate}d${t.estimate !== t.duration ? ' <b>(mismatch)</b>' : ''}` : ' &middot; <b>no estimate</b>') +
-        `<br>Float ${fl}d${fl === 0 ? ' <b>(critical path)</b>' : ''}`
+        `<br>Float ${fl}d${fl === 0 ? ' <b>(critical path)</b>' : ''}` +
+        (t.description ? `<br><br>${escapeHtml(t.description).replace(/\n/g, '<br>')}` : '')
       );
     },
     // selectTask repaints the gutter, the bar highlight and the editor. It deliberately
@@ -186,11 +191,12 @@ function renderGantt(view) {
     on_double_click: (task) => selectTask(task.id, true),
     // frappe fires date_change from update_bar_position, i.e. on EVERY mousemove of a
     // drag, not just on release. Re-rendering here would tear down the SVG mid-gesture
-    // and the drag would die after one column, so the commit is deferred to mouseup.
+    // and the drag would die after one column, so the commit is deferred to mouseup
+    // (see the window 'mouseup' listener in ui.js). A debounced auto-commit used to sit
+    // here as a fallback, but firing it while the mouse button was still down was exactly
+    // the same tear-down: a drag paused for >150ms lost every movement made after the pause.
     on_date_change: (task, start, end) => {
       App.pendingDrag = { id: task.id, s: synthIdx(start), e: synthIdx(end) };
-      clearTimeout(App.dragTimer);
-      App.dragTimer = setTimeout(commitDrag, 150);
     },
   });
 

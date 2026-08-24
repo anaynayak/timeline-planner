@@ -76,7 +76,6 @@ const App = {
   undoStack: [],
   redoStack: [],
   pendingDrag: null,
-  dragTimer: null,
 };
 
 const clone = (o) => JSON.parse(JSON.stringify(o));
