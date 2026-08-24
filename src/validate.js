@@ -10,10 +10,13 @@ const numOrNull = (v) => {
   return s === '' || isNaN(Number(s)) ? null : Number(s);
 };
 
-/** Unmapped columns that hold numbers on most populated rows - typically per-estimator
- *  columns like "Alice #" / "Bob #". Used to flag disagreement without naming columns. */
+/** Unmapped columns that hold a per-estimator guess - named "Estimate # <name>" (e.g.
+ *  "Estimate # Alice", "Estimate # Bob") and numeric on every populated row. The "Estimate
+ *  #" prefix is required: a column merely being numeric isn't enough, or an unrelated
+ *  numeric column like "Assignee" (an id, say) gets mistaken for one estimator's guess. */
 function numericExtras(doc) {
   return doc.extras.map((i) => doc.header[i]).filter((c) => {
+    if (!/^estimate\s*#/i.test(c.trim())) return false;
     let filled = 0, numeric = 0;
     for (const t of doc.tasks) {
       const raw = t.extra && t.extra[c];
@@ -21,7 +24,7 @@ function numericExtras(doc) {
       filled++;
       if (numOrNull(raw) != null) numeric++;
     }
-    return filled === 0 ? /#\s*$/.test(c) : numeric === filled;
+    return filled === 0 || numeric === filled;
   });
 }
 
@@ -59,7 +62,7 @@ function validate(doc, cal, an, loadRows) {
     const vals = numCols.map((c) => numOrNull(t.extra && t.extra[c])).filter((v) => v != null);
     if (vals.length > 1 && Math.max(...vals) - Math.min(...vals) >= 5) {
       add('info', 'estimator-spread',
-        `Columns disagree: ${numCols.map((c) => `${c.replace(/\s*#$/, '')} ${numOrNull(t.extra[c]) == null ? '-' : numOrNull(t.extra[c])}`).join(', ')}.`,
+        `Columns disagree: ${numCols.map((c) => `${c.replace(/^estimate\s*#\s*/i, '')} ${numOrNull(t.extra[c]) == null ? '-' : numOrNull(t.extra[c])}`).join(', ')}.`,
         t.id);
     }
   }

@@ -22,8 +22,8 @@ const GroupH = ({ children }) => html`<div class="group-h">${children}</div>`;
 const Hint = ({ children }) => html`<p class="hint">${children}</p>`;
 const KV = ({ k, v }) => html`<div class="kv"><span>${k}</span><span>${v}</span></div>`;
 
-/** Strip the trailing "#" that marks an estimator column, for display. */
-const estLabel = (c) => c.replace(/\s*#$/, '');
+/** Strip the leading "Estimate #" that marks an estimator column, for display. */
+const estLabel = (c) => c.replace(/^estimate\s*#\s*/i, '');
 
 /* ---------- gutter ---------- */
 

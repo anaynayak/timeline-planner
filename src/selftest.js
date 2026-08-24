@@ -196,6 +196,21 @@ function selftest(fixtures) {
   eq('0 unresolved deps', count('unresolved-dep'), 0);
   eq('0 cycles', count('cycle'), 0);
 
+  section('estimator disagreement ("Estimate # <name>" columns)');
+  eq('a numeric column not named "Estimate # ..." is not read as an estimator column',
+    numericExtras(load('name,estimate,dependency,Assignee\nA,5,,42\n', 'x.csv')), []);
+  eq('"Estimate # <name>" columns are read as estimator columns',
+    numericExtras(load('name,estimate,dependency,Estimate # Alice,Estimate # Bob\nA,5,,10,20\n', 'x.csv')),
+    ['Estimate # Alice', 'Estimate # Bob']);
+  eq('a >=5 spread across Estimate # columns is flagged, by estimator name', (() => {
+    const p = load('name,estimate,dependency,Estimate # Alice,Estimate # Bob\nA,5,,10,20\n', 'x.csv');
+    return validate(p, cal0, analyse(p, cal0)).find((x) => x.code === 'estimator-spread').msg;
+  })(), 'Columns disagree: Alice 10, Bob 20.');
+  eq('an unrelated numeric column never triggers estimator-spread', (() => {
+    const p = load('name,estimate,dependency,Assignee,Other\nA,5,,10,200\n', 'x.csv');
+    return validate(p, cal0, analyse(p, cal0)).filter((x) => x.code === 'estimator-spread').length;
+  })(), 0);
+
   section('applying a fix');
   const fixOne = (code, mode) => {
     const p = load(csv, 'plan.csv');
