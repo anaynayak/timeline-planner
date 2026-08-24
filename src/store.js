@@ -8,6 +8,7 @@
 const LS_KEY = 'miro-timeline:doc';
 const LS_THEME = 'miro-timeline:theme';
 const LS_SEEN = 'miro-timeline:seen-intro';
+const LS_TEAM_SIZE = 'miro-timeline:team-size';
 
 /* The bundled plan is invented data but loaded as "plan.csv", which reads as a file the
  * viewer owns - a first-time visitor had no way to tell whose numbers were on screen.
@@ -45,6 +46,21 @@ function restoreTheme() {
   let saved = null;
   try { saved = localStorage.getItem(LS_THEME); } catch (e) { /* ignore */ }
   App.theme = saved === 'light' || saved === 'dark' ? saved : 'auto';
+}
+
+/* Team size is a viewer preference, not something any CSV carries - buildDoc() always
+ * hands back the same hardcoded default. Remembering the last value typed means opening a
+ * different file, or Reset, does not silently drop it back to that default. Its own key,
+ * same reasoning as the theme above. A share link is different: it deliberately encodes an
+ * explicit team size (see share.js), so adoptDoc() leaves this alone - only loadDoc() reads
+ * it, since a freshly parsed file never has an opinion of its own. */
+function lastTeamSize() {
+  let n = null;
+  try { n = parseInt(localStorage.getItem(LS_TEAM_SIZE), 10); } catch (e) { /* ignore */ }
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+function rememberTeamSize(n) {
+  try { localStorage.setItem(LS_TEAM_SIZE, String(n)); } catch (e) { /* private mode - just will not persist */ }
 }
 
 const App = {
@@ -137,6 +153,8 @@ function adoptDoc(doc, fileName) {
 function loadDoc(text, fileName, isExample) {
   const cal = makeCalendar([]);
   const doc = parseAny(text, fileName, cal);
+  const remembered = lastTeamSize();
+  if (remembered != null) doc.teamSize = remembered;
   App.doc = doc;
   App.fileName = fileName || 'plan.csv';
   App.isExample = !!isExample;

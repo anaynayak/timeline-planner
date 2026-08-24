@@ -217,6 +217,7 @@ const PlanPanel = ({ doc, cal }) => {
         <input type="number" id="team-size" min="1" max="99" value=${doc.teamSize}
                onChange=${(e) => {
                  const n = Math.max(1, Number(e.target.value) || 1);
+                 rememberTeamSize(n);
                  if (n === App.doc.teamSize) return;
                  commit(() => { App.doc.teamSize = n; });
                }} />

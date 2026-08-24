@@ -907,6 +907,16 @@ check('id-based, semicolon-separated dependencies resolve',
   ref.deps.po.slice().sort().join() === 'reqs,vendor', ref.deps.po.join());
 check('the reference example has no unresolved dependencies', ref.unres === 0, String(ref.unres));
 
+/* Team size is a viewer preference, not something any CSV carries - buildDoc() always
+ * hands back the same hardcoded 4. Without remembering the last value, dropping a
+ * different file silently threw away whatever the viewer had set. */
+await planTab();
+await setField('#team-size', '11');
+await dropFile('reteamed.csv', 'name,estimate\nOnly,5\n');
+check('team size survives dropping a different file',
+  (await page.evaluate(() => window.App.doc.teamSize)) === 11,
+  String(await page.evaluate(() => window.App.doc.teamSize)));
+
 check('no page errors across the whole run', errors.length === 0, errors.slice(0, 4).join(' | '));
 await browser.close();
 console.log(`\n${fail ? '\x1b[31mFAILED\x1b[0m' : '\x1b[32mALL PASS\x1b[0m'}  ${pass} passed, ${fail} failed`);
