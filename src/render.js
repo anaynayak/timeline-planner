@@ -155,6 +155,18 @@ function renderGantt(view) {
     return;
   }
   const an = view.an;
+  // frappe has no incremental update path - every render tears down .gantt-container and
+  // builds a new one via `new Gantt(...)` below - and that element is now the one real
+  // scroller for both axes (see the layout comment on it in index.html), so a naive rebuild
+  // would snap the whole chart back to project start on every commit. Most jarring mid-drag:
+  // the container the user just scrolled would jump back the instant they release the mouse.
+  // Restore the old scroll position unless this is a genuinely new document (loadDoc/
+  // adoptDoc set freshDoc), where jumping to project start via `scroll_to` below is correct.
+  const prevContainer = el.querySelector('.gantt-container');
+  const prevScroll = prevContainer && !App.freshDoc
+    ? { left: prevContainer.scrollLeft, top: prevContainer.scrollTop }
+    : null;
+  App.freshDoc = false;
   el.innerHTML = '';
 
   App.gantt = new Gantt(el, ganttTasks(doc, cal), {
@@ -206,10 +218,17 @@ function renderGantt(view) {
     },
   });
 
+  const container = el.querySelector('.gantt-container');
+  if (prevScroll) {
+    container.scrollLeft = prevScroll.left;
+    container.scrollTop = prevScroll.top;
+    document.getElementById('gutter').scrollTop = prevScroll.top;
+  }
+
   // #gutter is our own element, outside frappe's world, so it has to be told to follow
   // .gantt-container's vertical scroll by hand - see the layout comment on #gutter in
   // index.html for why it has no native scrollbar of its own to do this automatically.
-  el.querySelector('.gantt-container').addEventListener('scroll', (e) => {
+  container.addEventListener('scroll', (e) => {
     document.getElementById('gutter').scrollTop = e.target.scrollTop;
   });
 

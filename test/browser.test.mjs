@@ -334,6 +334,38 @@ if (strandedRow) {
   check('a gutter row half-covered by its sticky header can still be selected',
     await page.evaluate(() => window.App.selected != null));
 }
+
+/* renderGantt has no incremental update path - every commit tears down .gantt-container and
+ * builds a fresh one via `new Gantt(...)`, and that element is now the one real scroller for
+ * both axes. A naive rebuild snapped it back to project start on every edit, most jarringly
+ * right as a drag's mouseup landed: the row you dragged, and the scroll position you set up
+ * to reach it, both vanished the instant you let go. */
+await page.evaluate(() => { document.querySelector('.gantt-container').scrollTop = 700; });
+await page.waitForTimeout(200);
+const dragId = await page.evaluate((hb) => {
+  const w = [...document.querySelectorAll('#gantt .bar-wrapper')].find((el) => {
+    const r = el.querySelector('.bar').getBoundingClientRect();
+    return r.top > hb + 30 && r.bottom < window.innerHeight - 50;
+  });
+  return w && w.getAttribute('data-id');
+}, headBottom);
+check('a fully visible row below the header exists to test against', !!dragId);
+if (dragId) {
+  const scrollBefore = await page.evaluate(() => document.querySelector('.gantt-container').scrollTop);
+  const before = await page.evaluate((i) => window.App.doc.tasks.find((t) => t.id === i).start, dragId);
+  const g = await geoOf(dragId);
+  await page.mouse.move(g.cx, g.cy);
+  await page.mouse.down();
+  await page.mouse.move(g.cx + 15, g.cy, { steps: 3 });
+  await page.mouse.move(g.cx + 3 * g.cw, g.cy, { steps: 15 });
+  await page.mouse.up();
+  await page.waitForTimeout(400);
+  const after = await page.evaluate((i) => window.App.doc.tasks.find((t) => t.id === i).start, dragId);
+  const scrollAfter = await page.evaluate(() => document.querySelector('.gantt-container').scrollTop);
+  check('the drag still committed', after !== before, `${before} -> ${after}`);
+  check('the scroll position survives the commit that follows a drag',
+    scrollAfter === scrollBefore, `${scrollBefore} -> ${scrollAfter}`);
+}
 await boot();   // restore the bundled example for the groups that follow
 
 /* ---------------------------------------------------------------- validation panel */

@@ -76,6 +76,12 @@ const App = {
   undoStack: [],
   redoStack: [],
   pendingDrag: null,
+  // Every renderGantt() fully recreates .gantt-container - frappe has no incremental
+  // update path - which would snap it back to project start on every commit. Set before a
+  // brand new document lands (loadDoc/adoptDoc), where jumping to project start is correct;
+  // left false the rest of the time so renderGantt knows to restore the old scroll position
+  // instead.
+  freshDoc: false,
 };
 
 const clone = (o) => JSON.parse(JSON.stringify(o));
@@ -144,6 +150,7 @@ function adoptDoc(doc, fileName) {
   App.selected = null;
   App.undoStack.length = 0;
   App.redoStack.length = 0;
+  App.freshDoc = true;
   rebuildCal();
   normalizeStarts();   // a link could carry a start that is not a working day here
   renderAll();
@@ -160,6 +167,7 @@ function loadDoc(text, fileName, isExample) {
   App.selected = null;
   App.undoStack.length = 0;
   App.redoStack.length = 0;
+  App.freshDoc = true;
   rebuildCal();
   renderAll();
 }
