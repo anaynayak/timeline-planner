@@ -292,6 +292,48 @@ check('gutter rows are still aligned with their bars after scrolling', await pag
     return Math.abs((b.top + b.height / 2) - (r.top + r.height / 2)) <= 1;
   });
 }));
+
+/* Both sticky headers sit at z-index above the SVG/rows they scroll over, so a row that ends
+ * up peeking out from underneath one - visible, but mostly covered - had its clicks and drags
+ * swallowed by the header div instead of reaching the row. That only shows up once something
+ * has actually been scrolled, which is exactly what this group already sets up. */
+const headBottom = await page.evaluate(() => document.querySelector('.grid-header').getBoundingClientRect().bottom);
+const strandedId = await page.evaluate((hb) => {
+  const w = [...document.querySelectorAll('#gantt .bar-wrapper')].find((el) => {
+    const r = el.querySelector('.bar').getBoundingClientRect();
+    return r.top < hb && r.bottom > hb - 40 && r.top > 0;
+  });
+  return w && w.getAttribute('data-id');
+}, headBottom);
+check('a row partly hidden under the sticky calendar header exists to test against', !!strandedId);
+if (strandedId) {
+  const before = await page.evaluate((i) => window.App.doc.tasks.find((t) => t.id === i).start, strandedId);
+  const g = await geoOf(strandedId);
+  await page.mouse.move(g.cx, g.cy);
+  await page.mouse.down();
+  await page.mouse.move(g.cx + 15, g.cy, { steps: 3 });
+  await page.mouse.move(g.cx + 3 * g.cw, g.cy, { steps: 15 });
+  await page.mouse.up();
+  await page.waitForTimeout(400);
+  const after = await page.evaluate((i) => window.App.doc.tasks.find((t) => t.id === i).start, strandedId);
+  check('a bar half-covered by the sticky calendar header can still be dragged',
+    after !== before, `${before} -> ${after}`);
+}
+const gheadBottom = await page.evaluate(() => document.querySelector('.g-head').getBoundingClientRect().bottom);
+const strandedRow = await page.evaluate((hb) => {
+  const r = [...document.querySelectorAll('#gutter .g-row')].find((el) => {
+    const rect = el.getBoundingClientRect();
+    return rect.top < hb && rect.bottom > hb - 40 && rect.top > 0;
+  });
+  return r && { x: r.getBoundingClientRect().left + 20, y: (r.getBoundingClientRect().top + r.getBoundingClientRect().bottom) / 2 };
+}, gheadBottom);
+check('a gutter row partly hidden under the sticky "Task (N)" header exists to test against', !!strandedRow);
+if (strandedRow) {
+  await page.mouse.click(strandedRow.x, strandedRow.y);
+  await page.waitForTimeout(150);
+  check('a gutter row half-covered by its sticky header can still be selected',
+    await page.evaluate(() => window.App.selected != null));
+}
 await boot();   // restore the bundled example for the groups that follow
 
 /* ---------------------------------------------------------------- validation panel */

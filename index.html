@@ -235,8 +235,11 @@
             border-bottom: 1px solid var(--line); color: var(--fg-dim);
             font-size: 11px; text-transform: uppercase; letter-spacing: .6px; box-sizing: border-box;
             /* mirrors .grid-header's own position: sticky; top: 0 on the chart side, so the
-               "Task (N)" label freezes exactly in step with the calendar header. */
-            position: sticky; top: 0; z-index: 1; background: var(--panel); }
+               "Task (N)" label freezes exactly in step with the calendar header. Also mirrors
+               its pointer-events: none for the same reason - a row scrolled partway under this
+               label would otherwise have clicks swallowed by the label instead of reaching the
+               row underneath, so it could not be selected. */
+            position: sticky; top: 0; z-index: 1; background: var(--panel); pointer-events: none; }
   .g-row { display: flex; align-items: center; gap: 6px; padding: 0 9px; cursor: pointer;
            border-bottom: 1px solid var(--line-2); box-sizing: border-box; }
   .g-row:hover { background: var(--panel-3); }
@@ -343,6 +346,17 @@
        - frappe's own sticky grid-header, current-month label and side-header are already
        written assuming exactly that, so this is frappe used as designed, not against it. */
     height: 100%; }
+  /* .grid-header is position: sticky, so once .gantt-container actually scrolls (see above)
+     rows pass underneath it rather than being clipped by it - by design, that's how a sticky
+     header is meant to work. But it is a plain div sitting at z-index: 1000 over the SVG, so
+     a bar that ends up partly behind it is not just visually covered, its pointer events are
+     swallowed by the header too: the row peeking out from under the header looked draggable
+     but every mousedown on it hit the header instead, and the drag never started. Frappe's
+     only use for clicks landing on the header itself is bind_grid_click's deselect-on-empty-
+     space handler, which is delegated from .gantt-container and matches a .grid-row equally
+     well - so letting clicks fall through to whatever is actually underneath (a row or a bar)
+     loses nothing and fixes dragging a bar that scrolls partway under the header. */
+  .gantt-container .grid-header { pointer-events: none; }
   .gantt .lower-text, .gantt .upper-text { fill: var(--fg-dim); }
   .gantt .mon .lower-text { fill: var(--fg); }
 
