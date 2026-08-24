@@ -261,6 +261,12 @@ function wireUI() {
 
   // bubbles after frappe's own svg mouseup, so the pending values are already final
   window.addEventListener('mouseup', () => { if (App.pendingDrag) commitDrag(); });
+  /* If the button is released outside the page - over the browser's own chrome, another
+   * window, a second display - no 'mouseup' is ever delivered here, and the drag would sit
+   * uncommitted forever. buttons === 0 on a later mousemove is the first evidence the
+   * button already came up, so treat it the same as a mouseup. Safe mid-gesture: this never
+   * fires while the button is actually still held (buttons is then non-zero). */
+  window.addEventListener('mousemove', (e) => { if (App.pendingDrag && e.buttons === 0) commitDrag(); });
 
   window.addEventListener('keydown', (e) => {
     const mod = e.metaKey || e.ctrlKey;

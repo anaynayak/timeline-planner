@@ -852,6 +852,31 @@ const a2 = await idxAll();
 check('a pause mid-drag does not truncate the gesture',
   a2.joinery - b2.joinery === 8, `moved ${a2.joinery - b2.joinery}d`);
 
+/* If the button comes up outside the page - the browser's own chrome, another window, a
+ * second display - no 'mouseup' DOM event is ever delivered here, so a drag committed only
+ * on mouseup would sit pending forever: the bar snaps back and the date never changes. */
+group('dragging a bar and releasing outside the page');
+await boot('rigid');
+const b3 = await idxAll();
+await page.locator(`#gantt .bar-wrapper[data-id="joinery"] .bar`).scrollIntoViewIfNeeded();
+await centreOn('joinery');
+await page.waitForTimeout(200);
+const g3 = await geoOf('joinery');
+await page.mouse.move(g3.cx, g3.cy);
+await page.mouse.down();
+await page.mouse.move(g3.cx + 15, g3.cy, { steps: 3 });
+const dropX = g3.cx + 5 * g3.cw;
+await page.mouse.move(dropX, g3.cy, { steps: 15 });
+// no page.mouse.up() here - simulate the release never reaching the page at all, and the
+// mouse wandering back over the page afterwards with the button already up
+await page.evaluate(({ x, y }) => window.dispatchEvent(
+  new MouseEvent('mousemove', { bubbles: true, clientX: x, clientY: y, buttons: 0 })), { x: dropX, y: g3.cy });
+await page.waitForTimeout(200);
+const a3 = await idxAll();
+check('a mouseup lost outside the page still commits the drag',
+  a3.joinery - b3.joinery === 5, `moved ${a3.joinery - b3.joinery}d`);
+await page.mouse.up();   // tidy up Playwright's own button-state tracking
+
 group('dragging a bar (ASAP)');
 await boot('asap');
 await drag('joinery', 4);
