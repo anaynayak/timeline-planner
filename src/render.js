@@ -168,7 +168,13 @@ function renderGantt(view) {
     today_button: false,
     holidays: {},                 // workday space has no non-working columns
     ignore: [],
-    container_height: 'auto',
+    // 0 rather than 'auto': 'auto' makes frappe set .gantt-container's height as an inline
+    // style (always wins over any stylesheet rule, including ours), computed from a content
+    // formula that was occasionally 1px off - just enough for its own overflow: auto to
+    // paint a redundant scrollbar. 0 skips that inline style entirely (it is only a floor in
+    // frappe's own Math.max against the real content height, so the grid itself is unaffected)
+    // and leaves the real height to index.html's `.gantt-container { height: 100% }`.
+    container_height: 0,
     scroll_to: synthYmd(Math.max(0, cal.nextIdx(doc.projectStart) - 3)),
     popup: (ctx) => {
       const t = App.doc.tasks.find((x) => x.id === ctx.task.id);
@@ -198,6 +204,13 @@ function renderGantt(view) {
     on_date_change: (task, start, end) => {
       App.pendingDrag = { id: task.id, s: synthIdx(start), e: synthIdx(end) };
     },
+  });
+
+  // #gutter is our own element, outside frappe's world, so it has to be told to follow
+  // .gantt-container's vertical scroll by hand - see the layout comment on #gutter in
+  // index.html for why it has no native scrollbar of its own to do this automatically.
+  el.querySelector('.gantt-container').addEventListener('scroll', (e) => {
+    document.getElementById('gutter').scrollTop = e.target.scrollTop;
   });
 
   markBars(doc, an, view.colors);

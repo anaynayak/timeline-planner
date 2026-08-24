@@ -214,17 +214,29 @@
 
   /* ---------- layout ---------- */
   #main { flex: 1 1 auto; display: flex; min-height: 0; }
-  /* the gantt scrolls horizontally inside itself, so #chart-wrap only scrolls vertically
-     and the name gutter stays put beside it */
-  #chart-wrap { flex: 1 1 auto; min-width: 0; display: flex; align-items: flex-start;
-                overflow-x: hidden; overflow-y: auto; }
-  #gutter { flex: 0 0 250px; background: var(--panel); border-right: 1px solid var(--line); }
-  #gantt { flex: 1 1 auto; min-width: 0; }
+  /* .gantt-container (not #chart-wrap) is the one true scroller for both axes - see the
+     comment on it below for why. #chart-wrap just gives #gutter and #gantt a definite,
+     stretched height (align-items defaults to stretch) so each can size its own scroll
+     area against it; overflow: hidden is a backstop against 1px rounding drift becoming a
+     third, redundant scrollbar. */
+  #chart-wrap { flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; overflow: hidden; }
+  #gutter { flex: 0 0 250px; min-height: 0; background: var(--panel);
+            border-right: 1px solid var(--line);
+            /* Rows scroll, but only ever programmatically - see the .gantt-container
+               'scroll' listener in render.js that keeps this in lockstep with the chart.
+               No native scrollbar of its own; overflow: hidden also drops the flex item's
+               automatic min-height to 0, letting it actually shrink to fit #chart-wrap
+               instead of growing to fit every row. */
+            overflow-y: hidden; }
+  #gantt { flex: 1 1 auto; min-width: 0; min-height: 0; }
   #gantt-empty { padding: 40px; color: var(--fg-dim); }
 
   .g-head { display: flex; align-items: flex-end; padding: 0 9px 7px;
             border-bottom: 1px solid var(--line); color: var(--fg-dim);
-            font-size: 11px; text-transform: uppercase; letter-spacing: .6px; box-sizing: border-box; }
+            font-size: 11px; text-transform: uppercase; letter-spacing: .6px; box-sizing: border-box;
+            /* mirrors .grid-header's own position: sticky; top: 0 on the chart side, so the
+               "Task (N)" label freezes exactly in step with the calendar header. */
+            position: sticky; top: 0; z-index: 1; background: var(--panel); }
   .g-row { display: flex; align-items: center; gap: 6px; padding: 0 9px; cursor: pointer;
            border-bottom: 1px solid var(--line-2); box-sizing: border-box; }
   .g-row:hover { background: var(--panel-3); }
@@ -320,7 +332,17 @@
     --g-progress-color: var(--panel-3); --g-expected-progress: var(--panel-3);
     --g-today-highlight: var(--accent);
     --g-weekend-highlight-color: var(--panel-3); --g-weekend-label-color: var(--panel-3);
-    background: var(--bg); }
+    background: var(--bg);
+    /* Frappe's own default is a fragile JS-computed content height (container_height:
+       'auto' in render.js sets an inline style, which no stylesheet rule could ever have
+       overridden anyway - inline always wins). A single off-by-one there was making
+       .gantt-container 1px taller than its content, which is enough for overflow: auto to
+       paint a scrollbar nobody needed. render.js passes 0 instead precisely so this rule
+       controls the real height: 100% of #gantt, which #chart-wrap has already given a
+       definite size. That also makes .gantt-container the one true scroller for both axes
+       - frappe's own sticky grid-header, current-month label and side-header are already
+       written assuming exactly that, so this is frappe used as designed, not against it. */
+    height: 100%; }
   .gantt .lower-text, .gantt .upper-text { fill: var(--fg-dim); }
   .gantt .mon .lower-text { fill: var(--fg); }
 

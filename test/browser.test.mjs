@@ -246,6 +246,54 @@ check('gutter rows stay aligned with their bars to within 1px', await page.evalu
 check('overflowing bar labels are hidden rather than colliding', await page.evaluate(() =>
   [...document.querySelectorAll('#gantt .bar-label.big')].every((e) => getComputedStyle(e).display === 'none')));
 
+/* ---------------------------------------------------------------- scrolling a tall plan */
+/* .gantt-container used to size itself to its full content height (container_height:
+ * 'auto'), so it never actually scrolled - #chart-wrap did the vertical scrolling instead,
+ * one level up. That put frappe's own sticky grid-header inside a box that never scrolls,
+ * so top: 0 never had anything to stick to and the header scrolled away with the rows. It
+ * also left the door open for a rounding-off .gantt-container to grow its own redundant
+ * scrollbar alongside #chart-wrap's. Now .gantt-container is the one real scroller. */
+group('scrolling a plan taller than the viewport');
+await boot();
+let big = 'name,start,estimate\n';
+for (let i = 0; i < 80; i++) big += `Task ${i},2027-01-0${(i % 9) + 1},3\n`;
+await page.evaluate((text) => {
+  const dt = new DataTransfer();
+  dt.items.add(new File([text], 'big.csv', { type: 'text/csv' }));
+  window.dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true }));
+}, big);
+await page.waitForTimeout(400);
+check('.gantt-container itself needs to scroll vertically', await page.evaluate(() => {
+  const el = document.querySelector('.gantt-container');
+  return el.scrollHeight > el.clientHeight + 1;
+}));
+check('#chart-wrap and #gutter show no scrollbar of their own',
+  await page.evaluate(() => {
+    const wrap = document.getElementById('chart-wrap'), gutter = document.getElementById('gutter');
+    return getComputedStyle(wrap).overflow === 'hidden' && getComputedStyle(gutter).overflowY === 'hidden';
+  }));
+const headerBefore = await page.evaluate(() => document.querySelector('.grid-header').getBoundingClientRect().top);
+const gheadBefore = await page.evaluate(() => document.querySelector('.g-head').getBoundingClientRect().top);
+await page.evaluate(() => { document.querySelector('.gantt-container').scrollTop = 300; });
+await page.waitForTimeout(200);
+const headerAfter = await page.evaluate(() => document.querySelector('.grid-header').getBoundingClientRect().top);
+const gheadAfter = await page.evaluate(() => document.querySelector('.g-head').getBoundingClientRect().top);
+check('the calendar header stays put while scrolling down',
+  Math.abs(headerAfter - headerBefore) < 1, `${headerBefore} -> ${headerAfter}`);
+check('the gutter\'s own "Task (N)" header stays put too',
+  Math.abs(gheadAfter - gheadBefore) < 1, `${gheadBefore} -> ${gheadAfter}`);
+check('the gutter scrolls in lockstep with the chart',
+  (await page.evaluate(() => document.getElementById('gutter').scrollTop)) === 300);
+check('gutter rows are still aligned with their bars after scrolling', await page.evaluate(() => {
+  const rows = [...document.querySelectorAll('#gutter .g-row')];
+  return window.App.doc.tasks.every((t, i) => {
+    const b = document.querySelector(`#gantt .bar-wrapper[data-id="${t.id}"] .bar`).getBoundingClientRect();
+    const r = rows[i].getBoundingClientRect();
+    return Math.abs((b.top + b.height / 2) - (r.top + r.height / 2)) <= 1;
+  });
+}));
+await boot();   // restore the bundled example for the groups that follow
+
 /* ---------------------------------------------------------------- validation panel */
 group('validation panel');
 const vtext = await page.locator('#tab-validate').innerText();
